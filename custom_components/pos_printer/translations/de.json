@@ -1,0 +1,62 @@
+
+{
+  "pos_printer": {
+    "title": "POS-Printer Bridge",
+    "config": {
+      "step": {
+        "user": {
+          "title": "POS-Printer Bridge einrichten",
+          "data": {
+            "mqtt_broker": "MQTT-Broker",
+            "printer_name": "Druckername"
+          }
+        }
+      }
+    },
+    "sensor": {
+      "last_job_status": "Status des letzten Druckauftrags",
+      "last_job_id": "ID des letzten Druckauftrags",
+      "last_status_update": "Zeitpunkt der letzten Statusmeldung",
+      "successful_jobs": "Anzahl erfolgreicher Druckaufträge"
+    },
+    "binary_sensor": {
+      "job_error": "Druckauftrag-Fehler"
+    },
+    "state": {
+      "success": "Erfolgreich",
+      "partial-error": "Teilweiser Fehler",
+      "error": "Fehler"
+    },
+    "options": {
+      "step": {
+        "user": {
+          "title": "POS-Printer Bridge Optionen",
+          "data": {
+            "mqtt_broker": "MQTT-Broker",
+            "printer_name": "Druckername"
+          }
+        }
+      }
+    },
+    "services": {
+      "print": {
+        "name": "Druckauftrag senden",
+        "description": "Sendet einen Druckauftrag an den POS-Drucker.",
+        "fields": {
+          "job_id": {
+            "name": "Auftrags-ID",
+            "description": "Eindeutige Kennung des Druckauftrags."
+          },
+          "priority": {
+            "name": "Priorität",
+            "description": "Druck-Priorität (0–9, 0 = höchste)."
+          },
+          "message": {
+            "name": "Nachricht",
+            "description": "Liste der zu druckenden Elemente."
+          }
+        }
+      }
+    }
+  }
+}
