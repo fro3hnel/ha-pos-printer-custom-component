@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/pos-printer-job.schema.json",
+  "title": "POS-Printer MQTT Job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["job_id", "priority", "message"],
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "minLength": 1,
+      "$comment": "Unique identifier – echoed back in status topic."
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9,
+      "$comment": "0 = highest, 9 = lowest"
+    },
+    "paper_width": {
+      "type": "integer",
+      "enum": [53, 80],
+      "default": 80
+    },
+    "feed_after": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "$comment": "Extra line feeds after finishing the job."
+    },
+    "expires": {
+      "type": "integer",
+      "minimum": 1,
+      "$comment": "Seconds until job becomes obsolete (optional)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "message": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/MessageElement" }
+    }
+  },
+
+  "$defs": {
+    "Orientation": {
+      "type": "string",
+      "enum": ["left", "center", "right"],
+      "default": "left"
+    },
+
+    "MessageElement": {
+      "oneOf": [
+        { "$ref": "#/$defs/TextElement" },
+        { "$ref": "#/$defs/BarcodeElement" },
+        { "$ref": "#/$defs/ImageElement" }
+      ]
+    },
+
+    "TextElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "content"],
+      "properties": {
+        "type": { "const": "text" },
+        "orientation": { "$ref": "#/$defs/Orientation" },
+        "content": { "type": "string" },
+        "bold": { "type": "boolean" },
+        "underline": { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "double_height": { "type": "boolean" },
+        "font": {
+          "type": "string",
+          "enum": ["A", "B", "C"]
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "$comment": "1–8 scaled width/height steps"
+        }
+      }
+    },
+
+    "BarcodeElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "content", "barcode_type"],
+      "properties": {
+        "type": { "const": "barcode" },
+        "orientation": { "$ref": "#/$defs/Orientation" },
+        "content": { "type": "string" },
+        "barcode_type": {
+          "type": "string",
+          "enum": [
+            "upca", "upce", "ean8", "ean13",
+            "code39", "code93", "code128", "qr-code"
+          ]
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 50,
+          "$comment": "Barcode height in dots"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 2,
+          "$comment": "Module width"
+        },
+        "eccLevel": {
+          "type": "string",
+          "enum": ["L", "M", "Q", "H"],
+          "$comment": "QR Code error correction level"
+        },
+        "mode": {
+          "type": "integer",
+          "$comment": "2D barcode mode or model"
+        },
+        "alignment": {
+          "$ref": "#/$defs/Orientation",
+          "$comment": "Horizontal alignment of barcode"
+        },
+        "textPosition": {
+          "type": "integer",
+          "default": 0,
+          "$comment": "Position constant for human-readable text"
+        },
+        "attribute": {
+          "type": "integer",
+          "default": 0,
+          "$comment": "Additional barcode attributes"
+        }
+      }
+    },
+
+    "ImageElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "content"],
+      "properties": {
+        "type": { "const": "image" },
+        "orientation": { "$ref": "#/$defs/Orientation" },
+        "content": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "contentMediaType": "image/png"
+        },
+        "nv_key": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "default": 1,
+          "$comment": "Key for NV image storage on printer"
+        }
+      }
+    }
+  }
+}
