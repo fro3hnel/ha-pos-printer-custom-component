@@ -167,6 +167,7 @@ class LastStatusTimestampSensor(SensorEntity):
         }
 
 
+
 class JobErrorBinarySensor(BinarySensorEntity):
     """Binary sensor that turns on when a print job errors."""
 
@@ -179,25 +180,22 @@ class JobErrorBinarySensor(BinarySensorEntity):
         self._printer_name = printer_name
         self._attr_name = f"{printer_name} Job Error"
         self._attr_unique_id = f"{entry_id}_job_error"
-        self._is_on: bool = False
-
-    @property
-    def is_on(self) -> bool:
-        return self._is_on
+        self._attr_is_on = False  # <-- wichtig für HA Core
 
     async def async_added_to_hass(self) -> None:
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
+        # Listener speichern zum späteren Abmelden
+        self._unsub = self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
 
     async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
+        if hasattr(self, "_unsub"):
             self._unsub()
 
     @callback
     def _handle_event(self, event: Event) -> None:
         status = event.data.get("status")
         is_error = status == "error"
-        if is_error and not self._is_on:
-            # Create a persistent notification on error
+        # Nur Notification erzeugen, wenn Status jetzt auf Error wechselt
+        if is_error and not self._attr_is_on:
             self.hass.async_create_task(
                 self.hass.services.async_call(
                     "persistent_notification",
@@ -205,14 +203,24 @@ class JobErrorBinarySensor(BinarySensorEntity):
                     {
                         "title": f"{DOMAIN} – Print Job Error",
                         "message": (
-                            f\"Job {event.data.get('job_id')} failed: "
-                            f\"{event.data.get('detail', '')}\"
+                            f"Job {event.data.get('job_id')} failed: "
+                            f"{event.data.get('detail', '')}"
                         ),
                     },
                 )
             )
-        self._is_on = is_error
+        self._attr_is_on = is_error
         self.async_write_ha_state()
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._printer_name)},
+            "name": self._printer_name,
+            "manufacturer": "Bixolon",
+            "model": "POS Printer Bridge",
+            "sw_version": "1.0.0",
+        }
             
     @property
     def device_info(self):
