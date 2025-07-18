@@ -11,7 +11,6 @@ async def async_setup(hass: HomeAssistant, config: dict):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = entry.data
     await setup_print_service(hass, entry.data)
-    await async_setup_sensors(hass, entry.data)
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):

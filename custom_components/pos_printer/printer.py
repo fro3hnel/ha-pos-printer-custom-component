@@ -17,7 +17,7 @@ async def setup_print_service(hass: HomeAssistant, config: dict):
             "priority": call.data.get("priority", 5),
             "message": call.data["message"],
         }
-        mqtt.async_publish(
+        await mqtt.async_publish(
             hass,
             topic=PRINT_TOPIC,
             payload=json.dumps(payload),
