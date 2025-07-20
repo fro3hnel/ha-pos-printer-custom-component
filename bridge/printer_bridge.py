@@ -324,6 +324,7 @@ class MQTTBridge:
     def _on_connect(self, cli, _userdata, _flags, rc):  # noqa: D401,N802
         if rc == 0:
             cli.subscribe(self.SUB_TOPIC, qos=1)
+            self._publish_bridge_announcement()
             self._publish_discovery()
             LOGGER.info("MQTT connected; subscribed to %s", self.SUB_TOPIC)
         else:
@@ -356,6 +357,7 @@ class MQTTBridge:
     # ---------------- heartbeat ----------------
     def _heartbeat_loop(self):
         while not self._stop.is_set():
+            self._publish_bridge_announcement()
             self._publish_heartbeat()
             time.sleep(CFG.heartbeat_interval)
 
@@ -385,6 +387,10 @@ class MQTTBridge:
                 "mem_available": psutil.virtual_memory().available,
             })
         self.client.publish(self.PUB_TOPIC, json.dumps({"heartbeat": info}), qos=0, retain=False)
+
+    def _publish_bridge_announcement(self):
+        payload = {"printer_name": CFG.printer_name}
+        self.client.publish("pos_printer/discovery", json.dumps(payload), qos=1, retain=True)
 
     def _publish_discovery(self):
         base = f"homeassistant/sensor/{CFG.printer_name}"

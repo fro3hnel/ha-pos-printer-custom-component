@@ -1,3 +1,4 @@
+import json
 import voluptuous as vol
 from homeassistant import config_entries
 from .const import DOMAIN, CONF_MQTT_BROKER, CONF_PRINTER_NAME
@@ -11,6 +12,28 @@ class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for POS-Printer Bridge."""
 
     VERSION = 1
+
+    async def async_step_mqtt(self, discovery_info: dict):
+        """Handle MQTT discovery."""
+        try:
+            data = json.loads(discovery_info["payload"])
+        except Exception:  # noqa: BLE001
+            return self.async_abort(reason="invalid_discovery")
+
+        printer_name = data.get(CONF_PRINTER_NAME)
+        if not printer_name:
+            return self.async_abort(reason="invalid_discovery")
+
+        await self.async_set_unique_id(printer_name)
+        self._abort_if_unique_id_configured()
+
+        return self.async_create_entry(
+            title=printer_name,
+            data={
+                CONF_PRINTER_NAME: printer_name,
+                CONF_MQTT_BROKER: data.get(CONF_MQTT_BROKER, ""),
+            },
+        )
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
