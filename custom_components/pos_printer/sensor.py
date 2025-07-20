@@ -30,7 +30,6 @@ async def async_setup_entry(
         LastJobStatusSensor(printer_name, entry_id),
         LastJobIdSensor(printer_name, entry_id),
         LastStatusTimestampSensor(printer_name, entry_id),
-        JobErrorBinarySensor(printer_name, entry_id),
         SuccessfulJobsCounterSensor(printer_name, entry_id),
     ]
 

@@ -1,4 +1,4 @@
-print_job:
+print:
   name: "Print POS Job"
   description: "Send a full print job (text, barcode, image) via MQTT to the bridge."
   fields:
@@ -6,7 +6,6 @@ print_job:
       description: "Job JSON matching job.schema.json"
       example: |
         {
-          "job_id": "job-001",
           "priority": 5,
           "message": [
             {
@@ -21,4 +20,4 @@ print_job:
               "barcode_type": "code128"
             }
           ]
-        }
+

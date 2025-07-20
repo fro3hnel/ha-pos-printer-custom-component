@@ -27,11 +27,10 @@ After setup, adjust the MQTT broker or printer name via **Configure** on the int
 
 | Service              | Description                                           |
 |----------------------|-------------------------------------------------------|
-| `pos_printer.print`  | Send a print job with `job_id`, `priority`, `message` |
+| `pos_printer.print`  | Send a print job with automatic `job_id`, `priority`, `message` |
 
 ### Service Fields
-- **job_id**: Unique identifier for the print job.  
-- **priority**: Print priority (0–9, 0 = highest).  
+- **priority**: Print priority (0–9, 0 = highest).
 - **message**: List of print elements (text, barcode, image).
 
 ## Sensors
