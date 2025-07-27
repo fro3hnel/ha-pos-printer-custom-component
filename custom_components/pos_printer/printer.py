@@ -38,4 +38,5 @@ async def setup_print_service(hass: HomeAssistant, config: dict):
         except Exception:
             pass
 
-    await mqtt.async_subscribe(hass, STATUS_TOPIC, handle_status)
+    if hasattr(hass, "config_entries"):
+        await mqtt.async_subscribe(hass, STATUS_TOPIC, handle_status)

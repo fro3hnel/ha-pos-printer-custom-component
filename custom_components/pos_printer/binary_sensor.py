@@ -12,3 +12,4 @@ async def async_setup_entry(
     printer_name = entry.data["printer_name"]
     entry_id = entry.entry_id
     async_add_entities([JobErrorBinarySensor(printer_name, entry_id)])
+
