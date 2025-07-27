@@ -52,3 +52,4 @@ async def test_print_service_publishes(mqtt_publish_mock):
     payload = json.loads(call["payload"])
     assert payload["job_id"]
     assert payload["message"][0]["content"] == "Hello"
+

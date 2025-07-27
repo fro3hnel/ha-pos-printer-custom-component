@@ -52,3 +52,4 @@ async def test_sensors_update_states():
     assert sensors[2].native_value.timestamp() == 1620000000
     assert sensors[3].is_on is False
     assert sensors[4].state == 1
+

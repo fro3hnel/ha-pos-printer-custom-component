@@ -85,7 +85,8 @@ class LastJobStatusSensor(PosPrinterEntity, SensorEntity):
         status = event.data.get("status")
         if status is not None:
             self._state = status
-            self.async_write_ha_state()
+            if self.hass and self.entity_id:
+                self.async_write_ha_state()
 
 
 class LastJobIdSensor(PosPrinterEntity, SensorEntity):
@@ -117,7 +118,8 @@ class LastJobIdSensor(PosPrinterEntity, SensorEntity):
         job_id = event.data.get("job_id")
         if job_id is not None:
             self._state = job_id
-            self.async_write_ha_state()
+            if self.hass and self.entity_id:
+                self.async_write_ha_state()
             
 
 
@@ -153,7 +155,8 @@ class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
         ts = event.data.get("timestamp")
         if isinstance(ts, (int, float)):
             self._timestamp = ts
-            self.async_write_ha_state()
+            if self.hass and self.entity_id:
+                self.async_write_ha_state()
             
             
 class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
@@ -198,7 +201,8 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
                 )
             )
         self._attr_is_on = is_error
-        self.async_write_ha_state()
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
 
 
 
@@ -230,5 +234,7 @@ class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
     def _handle_event(self, event: Event) -> None:
         if event.data.get("status") == "success":
             self._count += 1
-            self.async_write_ha_state()
+            if self.hass and self.entity_id:
+                self.async_write_ha_state()
             
+

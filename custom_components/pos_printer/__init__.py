@@ -21,3 +21,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     entry.runtime_data = None
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return True
+

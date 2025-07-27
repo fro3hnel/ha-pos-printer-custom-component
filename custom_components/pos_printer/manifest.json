@@ -9,3 +9,4 @@
   "codeowners": ["@fro3hnel"],
   "mqtt": ["pos_printer/discovery"]
 }
+

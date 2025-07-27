@@ -25,3 +25,4 @@ pip install .
 
 echo "Installation complete. Start the service with:"
 echo "$TARGET_DIR/bridge/.venv/bin/printer-bridge"
+
