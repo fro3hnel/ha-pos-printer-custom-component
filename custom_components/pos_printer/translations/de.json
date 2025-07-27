@@ -7,7 +7,6 @@
         "user": {
           "title": "POS-Printer Bridge einrichten",
           "data": {
-            "mqtt_broker": "MQTT-Broker",
             "printer_name": "Druckername"
           }
         }
@@ -32,7 +31,6 @@
         "user": {
           "title": "POS-Printer Bridge Optionen",
           "data": {
-            "mqtt_broker": "MQTT-Broker",
             "printer_name": "Druckername"
           }
         }
