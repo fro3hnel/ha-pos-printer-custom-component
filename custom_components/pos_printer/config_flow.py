@@ -38,6 +38,8 @@ class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
         if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_PRINTER_NAME])
+            self._abort_if_unique_id_configured()
             return self.async_create_entry(
                 title=user_input[CONF_PRINTER_NAME],
                 data=user_input,
