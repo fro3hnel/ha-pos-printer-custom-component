@@ -1,10 +1,9 @@
 import json
 import voluptuous as vol
 from homeassistant import config_entries
-from .const import DOMAIN, CONF_MQTT_BROKER, CONF_PRINTER_NAME
+from .const import DOMAIN, CONF_PRINTER_NAME
 
 STEP_USER_DATA_SCHEMA = vol.Schema({
-    vol.Required(CONF_MQTT_BROKER): str,
     vol.Required(CONF_PRINTER_NAME, default="kitchen_printer"): str,
 })
 
@@ -29,10 +28,7 @@ class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_create_entry(
             title=printer_name,
-            data={
-                CONF_PRINTER_NAME: printer_name,
-                CONF_MQTT_BROKER: data.get(CONF_MQTT_BROKER, ""),
-            },
+            data={CONF_PRINTER_NAME: printer_name},
         )
 
     async def async_step_user(self, user_input=None):
@@ -75,10 +71,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         current_options = self.config_entry.options
 
         data_schema = vol.Schema({
-            vol.Required(
-                CONF_MQTT_BROKER,
-                default=current_options.get(CONF_MQTT_BROKER, current_data.get(CONF_MQTT_BROKER)),
-            ): str,
             vol.Required(
                 CONF_PRINTER_NAME,
                 default=current_options.get(CONF_PRINTER_NAME, current_data.get(CONF_PRINTER_NAME)),
