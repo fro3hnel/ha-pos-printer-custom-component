@@ -20,4 +20,5 @@ print:
               "barcode_type": "code128"
             }
           ]
+        }
 
