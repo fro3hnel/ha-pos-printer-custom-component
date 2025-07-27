@@ -135,6 +135,39 @@ class BixolonPrinter:
         "qr-code": 12,
     }
 
+    _ERR_MAP = {
+        0: "SUCCESS",
+        -99: "PORT_OPEN_ERROR",
+        -100: "NO_CONNECTED_PRINTER",
+        -101: "NO_BIXOLON_PRINTER",
+        -102: "FAIL_SEND_DATA",
+        -103: "DISCONNECTED_PRINTER",
+        -104: "PORT_SET_ERROR",
+        -105: "WRITE_ERROR",
+        -106: "READ_ERROR",
+        -107: "BT_SDPCONNECT_ERROR",
+        -108: "BT_SDPSEARCH_ERROR",
+        -109: "BT_SOCKET_ERROR",
+        -110: "BT_BIND_ERROR",
+        -111: "BT_CONNECT_ERROR",
+        -112: "INVALID_IPADDRESS",
+        -113: "FAIL_CREATE_SOCKET",
+        -115: "WRONG_BARCODE_TYPE",
+        -116: "WRONG_BC_DATA_ERROR",
+        -117: "BAD_ARGUMENT",
+        -118: "IMAGE_OPEN_ERROR",
+        -119: "BAD_FILE",
+        -120: "MEM_ALLOC_ERROR",
+        -121: "NV_NO_KEY",
+        -122: "WRONG_RESPONSE",
+        -123: "FAIL_CREATE_THREAD",
+        -124: "NOT_SUPPORT",
+        -125: "FAIL_FIND_SENTINEL",
+        -126: "SCR_RESPONSE_ERROR",
+        -127: "READ_TIMEOUT",
+        -128: "DISABLE_BCD",
+    }
+
     def __init__(self, lib_path: str = "/usr/lib/libBxlPosAPI.so.1", port: bytes = b"USB:"):
         CDLL("libbluetooth.so.3", mode=RTLD_GLOBAL)
         self.lib = CDLL(lib_path)
@@ -168,8 +201,10 @@ class BixolonPrinter:
 
     # ---------------- connection ----------------
     def connect(self) -> None:
-        if self.lib.ConnectToPrinter(self.port) != 0:
-            raise RuntimeError("Printer connection failed")
+        rc = self.lib.ConnectToPrinter(self.port)
+        if rc != 0:
+            msg = self._ERR_MAP.get(rc, f"unknown error {rc}")
+            raise RuntimeError(f"Printer connection failed: {msg} (code {rc})")
         self.lib.SetTextEncoding(0)  # ENCODING_ASCII
         self._connected = True
         LOGGER.info("Printer connected on %s", self.port.decode())
@@ -199,7 +234,7 @@ class BixolonPrinter:
         with self._lock:
             for idx, item in enumerate(job["message"]):
                 try:
-                    t = item["type"]
+                    t = item.get("type", "unknown")
                     if t == "text":
                         self._txt(item["content"] + "\n", item.get("orientation", "left"))
                     elif t == "barcode":
@@ -209,8 +244,16 @@ class BixolonPrinter:
                     else:
                         raise ValueError(f"unknown type {t}")
                 except Exception as exc:  # noqa: BLE001
-                    LOGGER.error("Element %s failed: %s", idx, exc, exc_info=True)
-                    failed.append(f"{idx}:{exc}")
+                    element_desc = f"type={t}"
+                    if t == "text":
+                        snippet = item.get("content", "")[:20]
+                        element_desc += f", content='{snippet}'"
+                    elif t == "barcode":
+                        element_desc += f", barcode_type={item.get('barcode_type')}"
+                    LOGGER.error(
+                        "Element %s (%s) failed: %s", idx, element_desc, exc, exc_info=True
+                    )
+                    failed.append(f"{idx}:{element_desc}:{exc}")
             self._feed(4)
             self._cut()
         return failed
@@ -261,13 +304,19 @@ class BixolonPrinter:
         b64 = spec["content"]
         if b64.startswith("data:"):
             b64 = b64.split(",", 1)[1]
-        image_data = base64.b64decode(b64)
+        try:
+            image_data = base64.b64decode(b64)
+        except Exception as exc:
+            raise ValueError("Base64 decode failed") from exc
 
         # robustly load image into memory and convert
         buf = io.BytesIO(image_data)
-        with Image.open(buf) as img:
-            img.load()  # ensure full image is loaded
-            img = img.convert("RGB")
+        try:
+            with Image.open(buf) as img:
+                img.load()  # ensure full image is loaded
+                img = img.convert("RGB")
+        except Exception as exc:
+            raise ValueError("Image load/convert failed") from exc
 
         # save as BMP to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".bmp") as tmpf:
@@ -279,7 +328,9 @@ class BixolonPrinter:
 
         # download to printer NV storage
         if self.lib.DownloadNVImage(tmp_path.encode(), c_ubyte(key)) != 0:
-            raise RuntimeError(f"DownloadNVImage failed for key {key}")
+            raise RuntimeError(
+                f"DownloadNVImage failed for key {key} (temp file {tmp_path})"
+            )
 
         # print the NV-stored image
         if self.lib.PrintNVImage(c_ubyte(key)) != 0:
@@ -336,8 +387,12 @@ class MQTTBridge:
             priority = int(payload.get("priority", 5))
             self.spool.push(payload, priority)
             LOGGER.debug("Job queued: %s", payload.get("job_id"))
+        except json.JSONDecodeError as exc:
+            LOGGER.error("Invalid JSON on %s: %s", msg.topic, exc, exc_info=True)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.error("Invalid job payload: %s", exc, exc_info=True)
+            LOGGER.error(
+                "Invalid job payload structure on %s: %s", msg.topic, exc, exc_info=True
+            )
 
     # ---------------- worker ----------------
     def _worker_loop(self):
