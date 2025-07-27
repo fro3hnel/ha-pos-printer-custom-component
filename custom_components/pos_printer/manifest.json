@@ -6,5 +6,6 @@
   "requirements": [],
   "config_flow": true,
   "iot_class": "local_push",
-  "quality_scale": "platinum"
+  "quality_scale": "platinum",
+  "mqtt": ["pos_printer/discovery"]
 }
