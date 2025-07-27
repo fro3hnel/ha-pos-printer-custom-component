@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components import mqtt
 from .const import DOMAIN
@@ -12,8 +13,9 @@ async def setup_print_service(hass: HomeAssistant, config: dict):
 
     # Dienst registrieren
     async def handle_print(call):
+        job_id = call.data.get("job_id") or uuid.uuid4().hex
         payload = {
-            "job_id": call.data["job_id"],
+            "job_id": job_id,
             "priority": call.data.get("priority", 5),
             "message": call.data["message"],
         }

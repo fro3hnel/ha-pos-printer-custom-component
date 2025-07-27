@@ -1,0 +1,30 @@
+{
+    "$schema": "https://raw.githubusercontent.com/fro3hnel/hass-pos-printer-bridge/refs/heads/develop/job.schema.json",
+    "job_id": "weather-20250715",
+    "priority": 5,
+    "paper_width": 80,
+    "message": [
+        {
+            "type": "text",
+            "orientation": "center",
+            "content": "Weather report",
+            "bold": true
+        },
+        {
+            "type": "text",
+            "orientation": "center",
+            "content": "15.07.2025",
+            "underline": true
+        },
+        {
+            "type": "text",
+            "orientation": "left",
+            "content": "15.07: cloudy, 25°C/14°C"
+        },
+        {
+            "type": "barcode",
+            "barcode_type": "qr-code",
+            "content": "https://wetter.de/city"
+        }
+    ]
+}

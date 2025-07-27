@@ -27,11 +27,10 @@ After setup, adjust the MQTT broker or printer name via **Configure** on the int
 
 | Service              | Description                                           |
 |----------------------|-------------------------------------------------------|
-| `pos_printer.print`  | Send a print job with `job_id`, `priority`, `message` |
+| `pos_printer.print`  | Send a print job with automatic `job_id`, `priority`, `message` |
 
 ### Service Fields
-- **job_id**: Unique identifier for the print job.  
-- **priority**: Print priority (0–9, 0 = highest).  
+- **priority**: Print priority (0–9, 0 = highest).
 - **message**: List of print elements (text, barcode, image).
 
 ## Sensors
@@ -43,59 +42,22 @@ After setup, adjust the MQTT broker or printer name via **Configure** on the int
 - **Job Error** (`binary_sensor.<printer_name>_job_error`): Indicates if the last job failed; shows a persistent notification on error.
 
 ## Translations
-This integration includes German (`de.json`) translations. To add more languages, create corresponding JSON files in `translations/`.
+This integration includes English (`en.json`) and German (`de.json`) translations.
+Additional languages can be added under `translations/`.
+
+## Bridge Installation
+A helper script is provided to install the Raspberry Pi service. Run on the Pi:
+```bash
+curl -sL https://raw.githubusercontent.com/fro3hnel/ha-pos-printer-custom-component/main/bridge/install.sh | bash
+```
+
+## Removal
+Delete the integration in Home Assistant and remove the `pos_printer` folder from
+`custom_components` to clean up.
 
 ## Development and Testing
-Install development requirements and run tests:
+Install dependencies and run tests:
 ```bash
-pip install pytest
-pytest --cov custom_components/pos_printer
----
-
-**`tests/test_config_flow.py`**:
-
-```python
-"""Tests for config flow of POS-Printer Bridge."""
-import pytest
-from homeassistant import config_entries
-from custom_components.pos_printer.config_flow import PosPrinterConfigFlow, OptionsFlowHandler
-from custom_components.pos_printer.const import DOMAIN, CONF_MQTT_BROKER, CONF_PRINTER_NAME
-
-@pytest.fixture
-def config_flow(hass):
-    """Return a new config flow instance."""
-    flow = PosPrinterConfigFlow()
-    flow.hass = hass
-    return flow
-
-async def test_show_user_form(config_flow):
-    """Test that the user step shows a form."""
-    result = await config_flow.async_step_user()
-    assert result["type"] == "form"
-    assert result["step_id"] == "user"
-
-async def test_create_entry(config_flow):
-    """Test that valid data creates an entry."""
-    user_input = {CONF_MQTT_BROKER: "broker", CONF_PRINTER_NAME: "printer"}
-    result = await config_flow.async_step_user(user_input)
-    assert result["type"] == "create_entry"
-    assert result["title"] == "printer"
-    assert result["data"] == user_input
-
-async def test_options_flow(hass):
-    """Test the options flow schema and defaults."""
-    entry = config_entries.ConfigEntry(
-        domain=DOMAIN,
-        data={CONF_MQTT_BROKER: "broker", CONF_PRINTER_NAME: "printer"},
-        options={},
-        entry_id="test",
-        title="printer",
-        source=config_entries.SOURCE_USER
-    )
-    flow = OptionsFlowHandler(entry)
-    flow.hass = hass
-    result = await flow.async_step_init()
-    assert result["type"] == "form"
-    schema = result["data_schema"]
-    assert CONF_MQTT_BROKER in schema.schema
-    assert CONF_PRINTER_NAME in schema.schema
+pip install -r bridge/setup.py
+pytest
+```

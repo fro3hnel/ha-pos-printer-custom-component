@@ -15,6 +15,25 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+class PosPrinterEntity:
+    """Base class with common device info."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, printer_name: str, entry_id: str) -> None:
+        self._printer_name = printer_name
+        self._entry_id = entry_id
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._printer_name)},
+            "name": self._printer_name,
+            "manufacturer": "Bixolon",
+            "model": "POS Printer Bridge",
+            "sw_version": "0.1.0",
+        }
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -30,14 +49,13 @@ async def async_setup_entry(
         LastJobStatusSensor(printer_name, entry_id),
         LastJobIdSensor(printer_name, entry_id),
         LastStatusTimestampSensor(printer_name, entry_id),
-        JobErrorBinarySensor(printer_name, entry_id),
         SuccessfulJobsCounterSensor(printer_name, entry_id),
     ]
 
     async_add_entities(sensors)
 
 
-class LastJobStatusSensor(SensorEntity):
+class LastJobStatusSensor(PosPrinterEntity, SensorEntity):
     """Sensor for the status of the last print job."""
 
     _attr_translation_key = "last_job_status"
@@ -45,7 +63,7 @@ class LastJobStatusSensor(SensorEntity):
     _attr_icon = "mdi:printer-3d-check"
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
-        self._printer_name = printer_name
+        super().__init__(printer_name, entry_id)
         self._attr_name = f"{printer_name} Last Job Status"
         self._attr_unique_id = f"{entry_id}_last_job_status"
         self._state: str | None = None
@@ -69,18 +87,8 @@ class LastJobStatusSensor(SensorEntity):
             self._state = status
             self.async_write_ha_state()
 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._printer_name)},  # oder entry_id
-            "name": self._printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS Printer Bridge",
-            "sw_version": "1.0.0",
-        }
 
-
-class LastJobIdSensor(SensorEntity):
+class LastJobIdSensor(PosPrinterEntity, SensorEntity):
     """Sensor for the ID of the last print job."""
 
     _attr_translation_key = "last_job_id"
@@ -88,7 +96,7 @@ class LastJobIdSensor(SensorEntity):
     _attr_icon = "mdi:identifier"
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
-        self._printer_name = printer_name
+        super().__init__(printer_name, entry_id)
         self._attr_name = f"{printer_name} Last Job ID"
         self._attr_unique_id = f"{entry_id}_last_job_id"
         self._state: str | None = None
@@ -111,18 +119,9 @@ class LastJobIdSensor(SensorEntity):
             self._state = job_id
             self.async_write_ha_state()
             
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._printer_name)},  # oder entry_id
-            "name": self._printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS Printer Bridge",
-            "sw_version": "1.0.0",
-        }
 
 
-class LastStatusTimestampSensor(SensorEntity):
+class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
     """Sensor for the timestamp of the last status update."""
 
     _attr_translation_key = "last_status_update"
@@ -131,7 +130,7 @@ class LastStatusTimestampSensor(SensorEntity):
     _attr_device_class = "timestamp"
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
-        self._printer_name = printer_name
+        super().__init__(printer_name, entry_id)
         self._attr_name = f"{printer_name} Last Status Update"
         self._attr_unique_id = f"{entry_id}_last_status_update"
         self._timestamp: int | None = None
@@ -156,19 +155,8 @@ class LastStatusTimestampSensor(SensorEntity):
             self._timestamp = ts
             self.async_write_ha_state()
             
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._printer_name)},  # oder entry_id
-            "name": self._printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS Printer Bridge",
-            "sw_version": "1.0.0",
-        }
-
-
-
-class JobErrorBinarySensor(BinarySensorEntity):
+            
+class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
     """Binary sensor that turns on when a print job errors."""
 
     _attr_device_class = "problem"
@@ -177,7 +165,7 @@ class JobErrorBinarySensor(BinarySensorEntity):
     _attr_icon = "mdi:alert-circle"
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
-        self._printer_name = printer_name
+        super().__init__(printer_name, entry_id)
         self._attr_name = f"{printer_name} Job Error"
         self._attr_unique_id = f"{entry_id}_job_error"
         self._attr_is_on = False  # <-- wichtig für HA Core
@@ -212,28 +200,9 @@ class JobErrorBinarySensor(BinarySensorEntity):
         self._attr_is_on = is_error
         self.async_write_ha_state()
 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._printer_name)},
-            "name": self._printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS Printer Bridge",
-            "sw_version": "1.0.0",
-        }
-            
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._printer_name)},  # oder entry_id
-            "name": self._printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS Printer Bridge",
-            "sw_version": "1.0.0",
-        }
 
 
-class SuccessfulJobsCounterSensor(SensorEntity):
+class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
     """Sensor counting the number of successful print jobs."""
 
     _attr_translation_key = "successful_jobs"
@@ -241,7 +210,7 @@ class SuccessfulJobsCounterSensor(SensorEntity):
     _attr_icon = "mdi:counter"
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
-        self._printer_name = printer_name
+        super().__init__(printer_name, entry_id)
         self._attr_name = f"{printer_name} Successful Jobs"
         self._attr_unique_id = f"{entry_id}_successful_jobs"
         self._count: int = 0
@@ -262,14 +231,4 @@ class SuccessfulJobsCounterSensor(SensorEntity):
         if event.data.get("status") == "success":
             self._count += 1
             self.async_write_ha_state()
-            
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._printer_name)},  # oder entry_id
-            "name": self._printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS Printer Bridge",
-            "sw_version": "1.0.0",
-        }
             

@@ -1,0 +1,52 @@
+{
+  "pos_printer": {
+    "title": "POS-Printer Bridge",
+    "config": {
+      "step": {
+        "user": {
+          "title": "Set up POS-Printer Bridge",
+          "data": {
+            "mqtt_broker": "MQTT broker",
+            "printer_name": "Printer name"
+          }
+        }
+      }
+    },
+    "sensor": {
+      "last_job_status": "Status of last print job",
+      "last_job_id": "ID of last print job",
+      "last_status_update": "Last status update",
+      "successful_jobs": "Successful print jobs"
+    },
+    "binary_sensor": {
+      "job_error": "Print job error"
+    },
+    "state": {
+      "success": "Success",
+      "partial-error": "Partial error",
+      "error": "Error"
+    },
+    "options": {
+      "step": {
+        "user": {
+          "title": "POS-Printer Bridge options",
+          "data": {
+            "mqtt_broker": "MQTT broker",
+            "printer_name": "Printer name"
+          }
+        }
+      }
+    },
+    "services": {
+      "print": {
+        "name": "Send print job",
+        "description": "Send a print job to the POS printer.",
+        "fields": {
+          "job_id": {"name": "Job ID", "description": "Unique job identifier."},
+          "priority": {"name": "Priority", "description": "Print priority (0-9, 0 = highest)."},
+          "message": {"name": "Message", "description": "List of elements to print."}
+        }
+      }
+    }
+  }
+}
