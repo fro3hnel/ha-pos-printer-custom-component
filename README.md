@@ -46,10 +46,13 @@ This integration includes English (`en.json`) and German (`de.json`) translation
 Additional languages can be added under `translations/`.
 
 ## Bridge Installation
-A helper script is provided to install the Raspberry Pi service. Run on the Pi:
+A helper script installs the Raspberry Pi service **and** sets up a systemd unit. Run on the Pi:
 ```bash
 curl -sL https://raw.githubusercontent.com/fro3hnel/ha-pos-printer-custom-component/main/bridge/install.sh | bash
 ```
+The script clones this repository, installs dependencies (including `python3-pil`),
+creates a virtual environment with `--system-site-packages`, adds your user to the
+`plugdev` group for USB printer access and starts `pos-printer.service`.
 
 ## Removal
 Delete the integration in Home Assistant and remove the `pos_printer` folder from
