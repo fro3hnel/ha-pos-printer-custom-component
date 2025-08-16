@@ -35,6 +35,7 @@ import logging
 import os
 import queue
 import signal
+import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -61,6 +62,9 @@ except ImportError:
     psutil = None  # pragma: no cover
 
 load_dotenv()
+
+BRIDGE_VERSION = "0.1.0"
+REPO_URL = "https://github.com/fro3hnel/ha-pos-printer-custom-component.git"
 
 @dataclass(slots=True)
 class Config:
@@ -359,6 +363,8 @@ class BixolonPrinter:
 class MQTTBridge:
     SUB_TOPIC = f"print/pos/{CFG.printer_name}/job"
     PUB_TOPIC = f"print/pos/{CFG.printer_name}/ack"
+    UPDATE_TOPIC = f"print/pos/{CFG.printer_name}/update"
+    RESTART_TOPIC = f"print/pos/{CFG.printer_name}/restart"
 
     def __init__(self, printer: BixolonPrinter, spool: RedisSpool):
         self.printer, self.spool = printer, spool
@@ -366,6 +372,8 @@ class MQTTBridge:
         self.client.username_pw_set(CFG.mqtt_user, CFG.mqtt_pass)
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
+        self.client.message_callback_add(self.UPDATE_TOPIC, self._on_update)
+        self.client.message_callback_add(self.RESTART_TOPIC, self._on_restart)
         self._stop = threading.Event()
 
     # ---------------- public API ----------------
@@ -383,9 +391,16 @@ class MQTTBridge:
     def _on_connect(self, cli, _userdata, _flags, rc):  # noqa: D401,N802
         if rc == 0:
             cli.subscribe(self.SUB_TOPIC, qos=1)
+            cli.subscribe(self.UPDATE_TOPIC, qos=1)
+            cli.subscribe(self.RESTART_TOPIC, qos=1)
             self._publish_bridge_announcement()
             self._publish_discovery()
-            LOGGER.info("MQTT connected; subscribed to %s", self.SUB_TOPIC)
+            LOGGER.info(
+                "MQTT connected; subscribed to %s, %s and %s",
+                self.SUB_TOPIC,
+                self.UPDATE_TOPIC,
+                self.RESTART_TOPIC,
+            )
         else:
             LOGGER.error("MQTT connection failed: rc=%s", rc)
 
@@ -401,6 +416,35 @@ class MQTTBridge:
             LOGGER.error(
                 "Invalid job payload structure on %s: %s", msg.topic, exc, exc_info=True
             )
+
+    def _on_update(self, _cli, _userdata, msg):  # noqa: D401
+        """Handle update commands."""
+        try:
+            payload = json.loads(msg.payload)
+            version = payload.get("version")
+            if version:
+                repo = (
+                    f"git+{REPO_URL}@{version}#subdirectory=bridge"
+                )
+                subprocess.run(["pip", "install", repo], check=False)
+                LOGGER.info("Update command received for version %s", version)
+                self._restart()
+            else:
+                LOGGER.error("Update message missing version")
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Failed to process update message: %s", exc, exc_info=True)
+
+    def _on_restart(self, _cli, _userdata, _msg):  # noqa: D401
+        """Handle restart commands."""
+        LOGGER.info("Restart command received – rebooting")
+        self._restart()
+
+    def _restart(self) -> None:
+        """Execute system reboot."""
+        try:
+            subprocess.run(["sudo", "reboot"], check=False)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Failed to execute reboot: %s", exc, exc_info=True)
 
     # ---------------- worker ----------------
     def _worker_loop(self):
@@ -441,6 +485,7 @@ class MQTTBridge:
             "timestamp": int(time.time()),
             "queue_len": self.spool.length(),
             "printer_status": self.printer.get_status(),
+            "version": BRIDGE_VERSION,
         }
         if psutil:
             info.update({

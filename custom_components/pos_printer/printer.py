@@ -55,14 +55,14 @@ async def setup_print_service(hass: HomeAssistant, config: dict):
     hass.services.async_register(DOMAIN, "print", handle_print)
     hass.services.async_register(DOMAIN, "print_job", handle_print_job)
 
-    # Status-Antworten abonnieren
+    # Status-Antworten und Heartbeats abonnieren
     @callback
     def handle_status(msg):
         try:
             data = json.loads(msg.payload)
-            if "status" in data:
-                hass.bus.async_fire(f"{DOMAIN}.status", data)
+            hass.bus.async_fire(f"{DOMAIN}.status", data)
         except Exception:
+            # Ignore invalid JSON payloads
             pass
 
     if hasattr(hass, "config_entries"):

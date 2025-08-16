@@ -3,7 +3,7 @@ from homeassistant.core import HomeAssistant
 from .printer import setup_print_service
 from .const import DOMAIN
 
-PLATFORMS = ["sensor", "binary_sensor"]
+PLATFORMS = ["sensor", "binary_sensor", "update", "button"]
 
 async def async_setup(hass: HomeAssistant, config: dict):
     """Nur Legacy YAML, falls du das unterstützen willst."""
