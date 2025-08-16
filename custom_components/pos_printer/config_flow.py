@@ -16,7 +16,7 @@ class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle MQTT discovery."""
         try:
             data = json.loads(discovery_info["payload"])
-        except Exception:  # noqa: BLE001
+        except json.JSONDecodeError:
             return self.async_abort(reason="invalid_discovery")
 
         printer_name = data.get(CONF_PRINTER_NAME)
