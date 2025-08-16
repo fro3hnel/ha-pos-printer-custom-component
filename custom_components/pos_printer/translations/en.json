@@ -44,18 +44,12 @@
     "services": {
       "print": {
         "name": "Send print job",
-        "description": "Send a print job to the POS printer.",
+        "description": "Send a print job or full job object to the POS printer.",
         "fields": {
           "job_id": {"name": "Job ID", "description": "Unique job identifier."},
           "priority": {"name": "Priority", "description": "Print priority (0-9, 0 = highest)."},
-          "message": {"name": "Message", "description": "List of elements to print."}
-        }
-      },
-      "print_job": {
-        "name": "Send full job",
-        "description": "Send a complete job object to the POS printer.",
-        "fields": {
-          "job": {"name": "Job", "description": "Job JSON matching job.schema.json"}
+          "message": {"name": "Message", "description": "List of elements to print."},
+          "job": {"name": "Job", "description": "Complete job JSON matching job.schema.json"}
         }
       }
     }

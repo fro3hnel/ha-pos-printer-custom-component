@@ -61,8 +61,8 @@ async def test_print_service_publishes(mqtt_publish_mock):
 
 
 @pytest.mark.asyncio
-async def test_print_job_service_publishes(mqtt_publish_mock):
-    """Test sending a full job dictionary."""
+async def test_print_service_with_job_publishes(mqtt_publish_mock):
+    """Test that the print service handles a full job dictionary."""
     hass = FakeHass()
     config = {"printer_name": "printer"}
     await setup_print_service(hass, config)
@@ -72,7 +72,7 @@ async def test_print_job_service_publishes(mqtt_publish_mock):
     }
     await hass.services.async_call(
         DOMAIN,
-        "print_job",
+        "print",
         {"job": job},
         blocking=True,
     )

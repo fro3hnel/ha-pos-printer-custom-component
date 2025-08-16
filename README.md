@@ -27,15 +27,30 @@ After setup, you can adjust the printer name via **Configure** on the integratio
 
 | Service              | Description                                           |
 |----------------------|-------------------------------------------------------|
-| `pos_printer.print`  | Send print elements with automatic `job_id` |
-| `pos_printer.print_job` | Send a full job object |
+| `pos_printer.print`  | Send print elements or a full job object with automatic `job_id` |
 
 ### Service Fields for `print`
 - **priority**: Print priority (0–9, 0 = highest).
 - **message**: List of print elements (text, barcode, image).
+- **job**: Complete job JSON matching `job.schema.json`.
 
-### Service Fields for `print_job`
-- **job**: Full job JSON matching `job.schema.json`.
+### Example Service Call
+```yaml
+service: pos_printer.print
+data:
+  priority: 4
+  message:
+    - type: text
+      content: "Scan this code"
+      orientation: center
+    - type: barcode
+      content: "012345678905"
+      barcode_type: ean13
+      alignment: center
+    - type: image
+      content: "iVBORw0KGgoAAAANSUhEUgAAAAUA"
+      nv_key: 1
+```
 
 ## Sensors
 
