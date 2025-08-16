@@ -44,6 +44,13 @@
           "priority": {"name": "Priority", "description": "Print priority (0-9, 0 = highest)."},
           "message": {"name": "Message", "description": "List of elements to print."}
         }
+      },
+      "print_job": {
+        "name": "Send full job",
+        "description": "Send a complete job object to the POS printer.",
+        "fields": {
+          "job": {"name": "Job", "description": "Job JSON matching job.schema.json"}
+        }
       }
     }
   }

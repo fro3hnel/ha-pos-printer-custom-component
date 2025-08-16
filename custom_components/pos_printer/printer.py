@@ -13,6 +13,7 @@ async def setup_print_service(hass: HomeAssistant, config: dict):
 
     # Dienst registrieren
     async def handle_print(call):
+        """Send simplified print data via MQTT."""
         job_id = call.data.get("job_id") or uuid.uuid4().hex
         payload = {
             "job_id": job_id,
@@ -26,7 +27,19 @@ async def setup_print_service(hass: HomeAssistant, config: dict):
             qos=1,
         )
 
+    async def handle_print_job(call):
+        """Send full job object via MQTT."""
+        job = dict(call.data.get("job", {}))
+        job.setdefault("job_id", uuid.uuid4().hex)
+        await mqtt.async_publish(
+            hass,
+            topic=PRINT_TOPIC,
+            payload=json.dumps(job),
+            qos=1,
+        )
+
     hass.services.async_register(DOMAIN, "print", handle_print)
+    hass.services.async_register(DOMAIN, "print_job", handle_print_job)
 
     # Status-Antworten abonnieren
     @callback

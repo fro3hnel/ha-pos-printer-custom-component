@@ -1,23 +1,30 @@
 print:
   name: "Print POS Job"
-  description: "Send a full print job (text, barcode, image) via MQTT to the bridge."
+  description: "Send a simple print job via MQTT with automatic job_id generation."
+  fields:
+    job_id:
+      description: "Optional job identifier"
+      example: "abc123"
+    priority:
+      description: "Print priority (0-9, 0 = highest)"
+      example: 5
+    message:
+      description: "List of elements to print"
+      example: |
+        - type: text
+          content: "Hello, World!"
+          orientation: center
+
+print_job:
+  name: "Send Full POS Job"
+  description: "Send a full job object as defined in job.schema.json."
   fields:
     job:
-      description: "Job JSON matching job.schema.json"
+      description: "Complete job object"
       example: |
         {
           "priority": 5,
           "message": [
-            {
-              "type": "text",
-              "content": "Hello, World!",
-              "orientation": "center",
-              "bold": true
-            },
-            {
-              "type": "barcode",
-              "content": "12345678",
-              "barcode_type": "code128"
-            }
+            {"type": "text", "content": "Hello"}
           ]
-
+        }
