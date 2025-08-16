@@ -21,6 +21,12 @@
     "binary_sensor": {
       "job_error": "Druckauftrag-Fehler"
     },
+    "update": {
+      "bridge_update": "Bridge-Aktualisierung"
+    },
+    "button": {
+      "bridge_restart": "Bridge neu starten"
+    },
     "state": {
       "success": "Erfolgreich",
       "partial-error": "Teilweiser Fehler",

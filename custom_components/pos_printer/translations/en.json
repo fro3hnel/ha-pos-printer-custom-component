@@ -20,6 +20,12 @@
     "binary_sensor": {
       "job_error": "Print job error"
     },
+    "update": {
+      "bridge_update": "Bridge update"
+    },
+    "button": {
+      "bridge_restart": "Restart bridge"
+    },
     "state": {
       "success": "Success",
       "partial-error": "Partial error",

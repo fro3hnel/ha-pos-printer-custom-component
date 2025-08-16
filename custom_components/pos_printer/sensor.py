@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.binary_sensor import BinarySensorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class PosPrinterEntity:
             "name": self._printer_name,
             "manufacturer": "Bixolon",
             "model": "POS Printer Bridge",
-            "sw_version": "0.1.0",
+            "sw_version": VERSION,
         }
 
 async def async_setup_entry(
