@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -11,6 +12,9 @@ from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 
 from .const import DOMAIN
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
@@ -88,10 +92,12 @@ async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
         try:
             payload = json.loads(msg.payload)
             payload["printer_name"] = printer_name
-            hass.bus.async_fire(f"{DOMAIN}.status", payload)
+        except json.JSONDecodeError:
+            return
         except Exception:  # noqa: BLE001
-            # Ignore invalid JSON payloads
-            pass
+            _LOGGER.exception("Error handling status payload")
+            return
+        hass.bus.async_fire(f"{DOMAIN}.status", payload)
 
     unsub = await mqtt.async_subscribe(hass, status_topic, handle_status)
 
