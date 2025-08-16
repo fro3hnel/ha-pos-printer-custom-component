@@ -178,10 +178,10 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
         super().__init__(printer_name, entry_id)
         self._attr_name = f"{printer_name} Job Error"
         self._attr_unique_id = f"{entry_id}_job_error"
-        self._attr_is_on = False  # <-- wichtig für HA Core
+        self._attr_is_on = False  # required by Home Assistant core
 
     async def async_added_to_hass(self) -> None:
-        # Listener speichern zum späteren Abmelden
+        # Store listener for later unsubscribe
         self._unsub = self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
 
     async def async_will_remove_from_hass(self) -> None:
@@ -194,7 +194,7 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
             return
         status = event.data.get("status")
         is_error = status == "error"
-        # Nur Notification erzeugen, wenn Status jetzt auf Error wechselt
+        # Only create a notification when the status changes to error
         if is_error and not self._attr_is_on:
             self.hass.async_create_task(
                 self.hass.services.async_call(

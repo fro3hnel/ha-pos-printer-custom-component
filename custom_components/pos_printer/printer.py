@@ -82,7 +82,7 @@ async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
         hass.services.async_register(DOMAIN, "print", handle_print)
         data["service_registered"] = True
 
-    # Status-Antworten und Heartbeats abonnieren
+    # Subscribe to status responses and heartbeats
     @callback
     def handle_status(msg):
         try:

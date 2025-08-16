@@ -6,7 +6,7 @@ from .const import DOMAIN
 PLATFORMS = ["sensor", "binary_sensor", "update", "button"]
 
 async def async_setup(hass: HomeAssistant, config: dict):
-    """Nur Legacy YAML, falls du das unterstützen willst."""
+    """Legacy YAML support only, if needed."""
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
