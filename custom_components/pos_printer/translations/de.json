@@ -45,7 +45,7 @@
     "services": {
       "print": {
         "name": "Druckauftrag senden",
-        "description": "Sendet einen Druckauftrag an den POS-Drucker.",
+        "description": "Sendet einen Druckauftrag oder ein komplettes Auftragsobjekt.",
         "fields": {
           "job_id": {
             "name": "Auftrags-ID",
@@ -58,16 +58,10 @@
           "message": {
             "name": "Nachricht",
             "description": "Liste der zu druckenden Elemente."
-          }
-        }
-      },
-      "print_job": {
-        "name": "Vollständigen Auftrag senden",
-        "description": "Sendet ein komplettes Auftragsobjekt über MQTT.",
-        "fields": {
+          },
           "job": {
             "name": "Auftrag",
-            "description": "Auftrags-JSON entsprechend job.schema.json"
+            "description": "Komplettes Auftrags-JSON entsprechend job.schema.json"
           }
         }
       }

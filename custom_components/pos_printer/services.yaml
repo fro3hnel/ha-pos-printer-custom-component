@@ -1,6 +1,6 @@
 print:
   name: "Print POS Job"
-  description: "Send a simple print job via MQTT with automatic job_id generation."
+  description: "Send a print job or full job object via MQTT with automatic job_id generation."
   fields:
     job_id:
       description: "Optional job identifier"
@@ -11,24 +11,26 @@ print:
     message:
       description: "List of elements to print"
       example: |
-          - type: text
-            content: "Hello, World!"
-            alignment: center
-
-print_job:
-  name: "Send Full POS Job"
-  description: "Send a full job object as defined in job.schema.json."
-  fields:
-    message:
-      description: "List of elements to print (text, barcode, image)"
+        - type: text
+          content: "Scan this code"
+          alignment: center
+        - type: barcode
+          content: "012345678905"
+          barcode_type: ean13
+          alignment: center
+        - type: image
+          content: "iVBORw0KGgoAAAANSUhEUgAAAAUA"
+          nv_key: 1
+    job:
+      description: "Complete job object as defined in job.schema.json"
       example: |
         [
-            {
-              "type": "text",
-              "content": "Hello, World!",
-              "alignment": "center",
-              "bold": true
-            },
+          {
+            "type": "text",
+            "content": "Hello, World!",
+            "alignment": "center",
+            "bold": true
+          },
           {
             "type": "barcode",
             "content": "12345678",
