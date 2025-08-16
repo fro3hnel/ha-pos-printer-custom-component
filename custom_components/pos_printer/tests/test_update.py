@@ -12,6 +12,9 @@ class FakeBus:
 
     def async_listen(self, _event, cb):
         self._cbs.append(cb)
+        def _remove():
+            self._cbs.remove(cb)
+        return _remove
 
     def async_fire(self, _event, data):
         for cb in list(self._cbs):
@@ -61,3 +64,20 @@ async def test_update_entity_installs_exact_version(mqtt_publish_mock):
     assert call["topic"] == "print/pos/printer/update"
     payload = json.loads(call["payload"])
     assert payload["version"] == entity.latest_version
+
+
+@pytest.mark.asyncio
+async def test_update_entity_removes_listener():
+    """Update entity should detach bus listener when removed."""
+    hass = FakeHass()
+    entity = BridgeUpdateEntity("printer", "entry")
+    entity.hass = hass
+    await entity.async_added_to_hass()
+    assert hass.bus._cbs, "Listener was not registered"
+    await entity.async_will_remove_from_hass()
+    assert not hass.bus._cbs, "Listener was not removed"
+    hass.bus.async_fire(
+        f"{DOMAIN}.status", {"printer_name": "printer", "heartbeat": {"version": "1"}}
+    )
+    await hass.async_block_till_done()
+    assert entity.installed_version is None
