@@ -109,3 +109,36 @@ async def test_multiple_printers_publish_to_correct_topic(mqtt_publish_mock):
     )
     assert mqtt_publish_mock[-1]["topic"] == "print/pos/two/job"
 
+
+@pytest.mark.asyncio
+async def test_job_validation_accepts_string(mqtt_publish_mock):
+    """Valid job provided as JSON string should publish."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "printer"})
+    job = json.dumps(
+        {"priority": 1, "message": [{"type": "text", "content": "Hi"}]}
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "print",
+        {"printer_name": "printer", "job": job},
+        blocking=True,
+    )
+    assert mqtt_publish_mock, "mqtt.async_publish was not called"
+
+
+@pytest.mark.asyncio
+async def test_job_validation_rejects_invalid_job(mqtt_publish_mock):
+    """Invalid job should raise and not publish."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "printer"})
+    invalid_job = {"priority": 3}  # missing required message field
+    with pytest.raises(ValueError):
+        await hass.services.async_call(
+            DOMAIN,
+            "print",
+            {"printer_name": "printer", "job": invalid_job},
+            blocking=True,
+        )
+    assert not mqtt_publish_mock
+

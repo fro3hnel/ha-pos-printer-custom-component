@@ -5,12 +5,20 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
+
+import jsonschema
 
 from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 
 from .const import DOMAIN
+
+
+SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema" / "job.schema.json"
+with SCHEMA_PATH.open(encoding="utf-8") as schema_file:
+    JOB_SCHEMA: dict[str, Any] = json.load(schema_file)
 
 
 async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
@@ -60,6 +68,10 @@ async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
                 job.setdefault(
                     "job_id", call.data.get("job_id") or uuid.uuid4().hex
                 )
+                try:
+                    jsonschema.validate(job, JOB_SCHEMA)
+                except jsonschema.ValidationError as err:
+                    raise ValueError(f"Invalid job data: {err.message}") from err
                 await mqtt.async_publish(
                     hass,
                     topic=publish_topic,
@@ -72,6 +84,10 @@ async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
             message = call.data.get("message")
             priority = call.data.get("priority", 5)
             payload = {"job_id": job_id, "priority": priority, "message": message}
+            try:
+                jsonschema.validate(payload, JOB_SCHEMA)
+            except jsonschema.ValidationError as err:
+                raise ValueError(f"Invalid job data: {err.message}") from err
             await mqtt.async_publish(
                 hass,
                 topic=publish_topic,
