@@ -11,9 +11,9 @@ print:
     message:
       description: "List of elements to print"
       example: |
-        - type: text
-          content: "Hello, World!"
-          orientation: center
+          - type: text
+            content: "Hello, World!"
+            alignment: center
 
 print_job:
   name: "Send Full POS Job"
@@ -23,12 +23,12 @@ print_job:
       description: "List of elements to print (text, barcode, image)"
       example: |
         [
-          {
-            "type": "text",
-            "content": "Hello, World!",
-            "orientation": "center",
-            "bold": true
-          },
+            {
+              "type": "text",
+              "content": "Hello, World!",
+              "alignment": "center",
+              "bold": true
+            },
           {
             "type": "barcode",
             "content": "12345678",
