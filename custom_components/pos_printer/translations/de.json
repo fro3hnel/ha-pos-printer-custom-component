@@ -54,6 +54,16 @@
             "description": "Liste der zu druckenden Elemente."
           }
         }
+      },
+      "print_job": {
+        "name": "Vollständigen Auftrag senden",
+        "description": "Sendet ein komplettes Auftragsobjekt über MQTT.",
+        "fields": {
+          "job": {
+            "name": "Auftrag",
+            "description": "Auftrags-JSON entsprechend job.schema.json"
+          }
+        }
       }
     }
   }

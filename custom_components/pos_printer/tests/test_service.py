@@ -53,3 +53,25 @@ async def test_print_service_publishes(mqtt_publish_mock):
     assert payload["job_id"]
     assert payload["message"][0]["content"] == "Hello"
 
+
+@pytest.mark.asyncio
+async def test_print_job_service_publishes(mqtt_publish_mock):
+    """Test sending a full job dictionary."""
+    hass = FakeHass()
+    config = {"printer_name": "printer"}
+    await setup_print_service(hass, config)
+    job = {
+        "priority": 4,
+        "message": [{"type": "text", "content": "Hi"}],
+    }
+    await hass.services.async_call(
+        DOMAIN,
+        "print_job",
+        {"job": job},
+        blocking=True,
+    )
+    call = mqtt_publish_mock[-1]
+    payload = json.loads(call["payload"])
+    assert payload["priority"] == 4
+    assert payload["message"][0]["content"] == "Hi"
+
