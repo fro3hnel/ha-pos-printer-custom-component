@@ -118,9 +118,9 @@ sudo systemctl enable --now pos-printer.service
   "priority": 5,
   "paper_width": 80,
   "message": [
-    {"type": "text", "orientation": "center", "content": "Weather report", "bold": true},
-    {"type": "text", "orientation": "center", "content": "15.07.2025", "underline": true},
-    {"type": "text", "orientation": "left", "content": "15.07: cloudy, 25°C/14°C"},
+    {"type": "text", "alignment": "center", "content": "Weather report", "bold": true},
+    {"type": "text", "alignment": "center", "content": "15.07.2025", "underline": true},
+    {"type": "text", "alignment": "left", "content": "15.07: cloudy, 25°C/14°C"},
     {"type": "barcode", "barcode_type": "qr-code", "content": "https://wetter.de/city"}
   ]
 }

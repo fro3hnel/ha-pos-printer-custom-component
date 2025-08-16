@@ -6,19 +6,19 @@
     "message": [
         {
             "type": "text",
-            "orientation": "center",
+            "alignment": "center",
             "content": "Weather report",
             "bold": true
         },
         {
             "type": "text",
-            "orientation": "center",
+            "alignment": "center",
             "content": "15.07.2025",
             "underline": true
         },
         {
             "type": "text",
-            "orientation": "left",
+            "alignment": "left",
             "content": "15.07: cloudy, 25°C/14°C"
         },
         {
