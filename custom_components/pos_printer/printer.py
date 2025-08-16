@@ -7,6 +7,10 @@ from .const import DOMAIN
 
 
 async def setup_print_service(hass: HomeAssistant, config: dict):
+    """Register print services and MQTT status listener."""
+
+    # Ensure the MQTT integration is available before using it
+    await mqtt.async_wait_for_mqtt_client(hass)
 
     PRINT_TOPIC = f"print/pos/{config['printer_name']}/job"
     STATUS_TOPIC = f"print/pos/{config['printer_name']}/ack"

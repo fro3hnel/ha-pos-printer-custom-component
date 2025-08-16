@@ -31,7 +31,13 @@ def mqtt_publish_mock(monkeypatch):
     calls = []
     async def fake_publish(hass, topic, payload, qos):
         calls.append({"topic": topic, "payload": payload, "qos": qos})
+    async def fake_wait_for_client(hass):
+        return
     monkeypatch.setattr("homeassistant.components.mqtt.async_publish", fake_publish)
+    monkeypatch.setattr(
+        "homeassistant.components.mqtt.async_wait_for_mqtt_client",
+        fake_wait_for_client,
+    )
     return calls
 
 @pytest.mark.asyncio
