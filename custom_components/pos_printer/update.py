@@ -65,6 +65,8 @@ class BridgeUpdateEntity(PosPrinterEntity, UpdateEntity):
     @callback
     def _handle_event(self, event: Event) -> None:
         """Handle status or heartbeat events to extract version."""
+        if event.data.get("printer_name") != self._printer_name:
+            return
         heartbeat: dict[str, Any] | None = event.data.get("heartbeat")
         if heartbeat and (version := heartbeat.get("version")):
             if version != self._installed_version:

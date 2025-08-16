@@ -1,62 +1,117 @@
+"""Printer service utilities for the POS printer integration."""
+
+from __future__ import annotations
+
 import json
 import uuid
-from homeassistant.core import HomeAssistant, callback
+from collections.abc import Callable
+from typing import Any
+
 from homeassistant.components import mqtt
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+
 from .const import DOMAIN
 
 
-async def setup_print_service(hass: HomeAssistant, config: dict):
-    """Register print services and MQTT status listener."""
+async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
+    """Register print services and MQTT status listener.
 
-    # Ensure the MQTT integration is available before using it
+    This function can be called multiple times for different printers. The first
+    call registers a single ``pos_printer.print`` service which routes print
+    jobs to the correct MQTT topic based on the ``printer_name`` field.
+    Subsequent calls only add new printer topics and status subscriptions.
+    """
+
     await mqtt.async_wait_for_mqtt_client(hass)
 
-    PRINT_TOPIC = f"print/pos/{config['printer_name']}/job"
-    STATUS_TOPIC = f"print/pos/{config['printer_name']}/ack"
+    data = hass.data.setdefault(DOMAIN, {})
+    printers: dict[str, dict[str, Any]] = data.setdefault("printers", {})
 
-    # Dienst registrieren
-    async def handle_print(call):
-        """Send print data via MQTT.
+    printer_name: str = config["printer_name"]
+    print_topic = f"print/pos/{printer_name}/job"
+    status_topic = f"print/pos/{printer_name}/ack"
 
-        Accepts either a simplified ``message`` or a full ``job`` structure.
-        """
-        if (job := call.data.get("job")) is not None:
-            if isinstance(job, str):
-                try:
-                    job = json.loads(job)
-                except json.JSONDecodeError:
-                    job = {}
-            job.setdefault("job_id", call.data.get("job_id") or uuid.uuid4().hex)
+    # Register the service once
+    if "service_registered" not in data:
+
+        async def handle_print(call: ServiceCall) -> None:
+            """Send print data via MQTT to the selected printer."""
+
+            target = call.data.get("printer_name")
+            if not target:
+                if len(printers) == 1:
+                    target = next(iter(printers))
+                else:
+                    # No printer specified and multiple available
+                    return
+
+            topics = printers.get(target)
+            if not topics:
+                return
+
+            publish_topic: str = topics["print_topic"]
+
+            if (job := call.data.get("job")) is not None:
+                if isinstance(job, str):
+                    try:
+                        job = json.loads(job)
+                    except json.JSONDecodeError:
+                        job = {}
+                job.setdefault(
+                    "job_id", call.data.get("job_id") or uuid.uuid4().hex
+                )
+                await mqtt.async_publish(
+                    hass,
+                    topic=publish_topic,
+                    payload=json.dumps(job),
+                    qos=1,
+                )
+                return
+
+            job_id = call.data.get("job_id") or uuid.uuid4().hex
+            message = call.data.get("message")
+            priority = call.data.get("priority", 5)
+            payload = {"job_id": job_id, "priority": priority, "message": message}
             await mqtt.async_publish(
                 hass,
-                topic=PRINT_TOPIC,
-                payload=json.dumps(job),
+                topic=publish_topic,
+                payload=json.dumps(payload),
                 qos=1,
             )
-            return
 
-        job_id = call.data.get("job_id") or uuid.uuid4().hex
-        message = call.data.get("message")
-        priority = call.data.get("priority", 5)
-        payload = {"job_id": job_id, "priority": priority, "message": message}
-        await mqtt.async_publish(
-            hass,
-            topic=PRINT_TOPIC,
-            payload=json.dumps(payload),
-            qos=1,
-        )
-
-    hass.services.async_register(DOMAIN, "print", handle_print)
+        hass.services.async_register(DOMAIN, "print", handle_print)
+        data["service_registered"] = True
 
     # Status-Antworten und Heartbeats abonnieren
     @callback
     def handle_status(msg):
         try:
-            data = json.loads(msg.payload)
-            hass.bus.async_fire(f"{DOMAIN}.status", data)
-        except Exception:
+            payload = json.loads(msg.payload)
+            payload["printer_name"] = printer_name
+            hass.bus.async_fire(f"{DOMAIN}.status", payload)
+        except Exception:  # noqa: BLE001
             # Ignore invalid JSON payloads
             pass
 
-    if hasattr(hass, "config_entries"):
-        await mqtt.async_subscribe(hass, STATUS_TOPIC, handle_status)
+    unsub = await mqtt.async_subscribe(hass, status_topic, handle_status)
+
+    printers[printer_name] = {"print_topic": print_topic, "unsub": unsub}
+
+
+async def unload_print_service(hass: HomeAssistant, config: dict) -> None:
+    """Remove MQTT subscriptions and service for a printer."""
+
+    data = hass.data.get(DOMAIN)
+    if not data:
+        return
+
+    printers: dict[str, dict[str, Any]] = data.get("printers", {})
+    printer_name: str = config["printer_name"]
+
+    info = printers.pop(printer_name, None)
+    if info and (unsub := info.get("unsub")):
+        unsub()
+
+    if not printers:
+        await hass.services.async_remove(DOMAIN, "print")
+        hass.data.pop(DOMAIN)

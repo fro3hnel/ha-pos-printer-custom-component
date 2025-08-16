@@ -18,7 +18,8 @@ The POS-Printer Bridge integration allows Home Assistant to send print jobs over
 
 1. Go to **Settings → Devices & Services → Integrations**.
 2. Click **Add Integration** and search for **POS-Printer Bridge**.
-3. Enter a printer name. The MQTT settings from Home Assistant are used automatically.
+3. Enter a printer name. Repeat the setup to add multiple printers; each printer
+   uses its own MQTT topics based on the chosen name.
 
 ### Options
 After setup, you can adjust the printer name via **Configure** on the integration entry.
@@ -30,6 +31,7 @@ After setup, you can adjust the printer name via **Configure** on the integratio
 | `pos_printer.print`  | Send print elements or a full job object with automatic `job_id` |
 
 ### Service Fields for `print`
+- **printer_name**: Target printer (required if more than one printer is configured).
 - **priority**: Print priority (0–9, 0 = highest).
 - **message**: List of print elements (text, barcode, image).
 - **job**: Complete job JSON matching `job.schema.json`.

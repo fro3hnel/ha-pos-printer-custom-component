@@ -2,6 +2,9 @@ print:
   name: "Print POS Job"
   description: "Send a print job or full job object via MQTT with automatic job_id generation."
   fields:
+    printer_name:
+      description: "Name of the target printer"
+      example: "kitchen_printer"
     job_id:
       description: "Optional job identifier"
       example: "abc123"

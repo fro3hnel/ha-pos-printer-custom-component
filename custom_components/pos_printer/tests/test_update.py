@@ -46,7 +46,11 @@ async def test_update_entity_installs_exact_version(mqtt_publish_mock):
     entity.hass = hass
     await entity.async_added_to_hass()
 
-    heartbeat = {"heartbeat": {"version": "0.0.9"}}
+    # Event from different printer should be ignored
+    hass.bus.async_fire(
+        f"{DOMAIN}.status", {"printer_name": "other", "heartbeat": {"version": "0.0.8"}}
+    )
+    heartbeat = {"printer_name": "printer", "heartbeat": {"version": "0.0.9"}}
     hass.bus.async_fire(f"{DOMAIN}.status", heartbeat)
     await hass.async_block_till_done()
     assert entity.installed_version == "0.0.9"
