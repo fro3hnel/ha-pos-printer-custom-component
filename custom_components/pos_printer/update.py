@@ -60,7 +60,9 @@ class BridgeUpdateEntity(PosPrinterEntity, UpdateEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register event listener for heartbeat messages."""
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:

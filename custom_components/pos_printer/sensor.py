@@ -3,6 +3,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import logging
+from typing import Callable
 
 from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.config_entries import ConfigEntry
@@ -23,6 +24,11 @@ class PosPrinterEntity:
     def __init__(self, printer_name: str, entry_id: str) -> None:
         self._printer_name = printer_name
         self._entry_id = entry_id
+        self._unsub: Callable[[], None] | None = None
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
 
     @property
     def device_info(self):
@@ -74,11 +80,9 @@ class LastJobStatusSensor(PosPrinterEntity, SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         # Listen to our custom status events
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -109,11 +113,9 @@ class LastJobIdSensor(PosPrinterEntity, SensorEntity):
         return self._state
 
     async def async_added_to_hass(self) -> None:
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -149,11 +151,9 @@ class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
         return datetime.fromtimestamp(self._timestamp, tz=timezone.utc)
 
     async def async_added_to_hass(self) -> None:
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -183,10 +183,6 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
     async def async_added_to_hass(self) -> None:
         # Listener speichern zum späteren Abmelden
         self._unsub = self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, "_unsub"):
-            self._unsub()
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -233,11 +229,9 @@ class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
         return self._count
 
     async def async_added_to_hass(self) -> None:
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
