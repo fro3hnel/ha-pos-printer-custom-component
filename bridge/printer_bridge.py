@@ -233,10 +233,18 @@ class BixolonPrinter:
         self.lib.SetLeftMargin(c_int(CFG.left_margin))
         with self._lock:
             for idx, item in enumerate(job["message"]):
+                t = "unknown"
                 try:
+                    if not isinstance(item, dict):
+                        raise TypeError(
+                            f"message element must be dict, got {type(item).__name__}"
+                        )
                     t = item.get("type", "unknown")
                     if t == "text":
-                        self._txt(item["content"] + "\n", item.get("orientation", "left"))
+                        self._txt(
+                            item["content"] + "\n",
+                            item.get("orientation", "left"),
+                        )
                     elif t == "barcode":
                         self._print_barcode(item)
                     elif t == "image":
