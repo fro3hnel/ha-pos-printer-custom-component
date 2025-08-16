@@ -44,7 +44,18 @@ async def test_sensors_update_states():
     for sensor in sensors:
         sensor.hass = hass
         await sensor.async_added_to_hass()
-    event_data = {"status": "success", "job_id": "1", "timestamp": 1620000000}
+    # Event for a different printer should be ignored
+    hass.bus.async_fire(
+        f"{DOMAIN}.status",
+        {"printer_name": "other", "status": "error", "job_id": "0", "timestamp": 1},
+    )
+    # Matching printer updates sensors
+    event_data = {
+        "printer_name": "printer",
+        "status": "success",
+        "job_id": "1",
+        "timestamp": 1620000000,
+    }
     hass.bus.async_fire(f"{DOMAIN}.status", event_data)
     await hass.async_block_till_done()
     assert sensors[0].state == "success"

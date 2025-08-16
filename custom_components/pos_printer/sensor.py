@@ -82,6 +82,8 @@ class LastJobStatusSensor(PosPrinterEntity, SensorEntity):
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         status = event.data.get("status")
         if status is not None:
             self._state = status
@@ -115,6 +117,8 @@ class LastJobIdSensor(PosPrinterEntity, SensorEntity):
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         job_id = event.data.get("job_id")
         if job_id is not None:
             self._state = job_id
@@ -153,6 +157,8 @@ class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         ts = event.data.get("timestamp")
         if isinstance(ts, (int, float)):
             self._timestamp = ts
@@ -184,6 +190,8 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         status = event.data.get("status")
         is_error = status == "error"
         # Nur Notification erzeugen, wenn Status jetzt auf Error wechselt
@@ -233,6 +241,8 @@ class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         if event.data.get("status") == "success":
             self._count += 1
             if self.hass and self.entity_id:

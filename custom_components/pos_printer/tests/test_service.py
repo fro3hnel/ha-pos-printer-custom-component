@@ -10,6 +10,7 @@ class FakeHass:
     """Minimal hass object for tests."""
 
     def __init__(self):
+        self.data = {}
         self.services = SimpleNamespace(
             _services={}, async_register=self._register, async_call=self._async_call
         )
@@ -33,11 +34,14 @@ def mqtt_publish_mock(monkeypatch):
         calls.append({"topic": topic, "payload": payload, "qos": qos})
     async def fake_wait_for_client(hass):
         return
+    async def fake_subscribe(hass, topic, callback):
+        return lambda: None
     monkeypatch.setattr("homeassistant.components.mqtt.async_publish", fake_publish)
     monkeypatch.setattr(
         "homeassistant.components.mqtt.async_wait_for_mqtt_client",
         fake_wait_for_client,
     )
+    monkeypatch.setattr("homeassistant.components.mqtt.async_subscribe", fake_subscribe)
     return calls
 
 @pytest.mark.asyncio
@@ -73,11 +77,35 @@ async def test_print_service_with_job_publishes(mqtt_publish_mock):
     await hass.services.async_call(
         DOMAIN,
         "print",
-        {"job": job},
+        {"printer_name": "printer", "job": job},
         blocking=True,
     )
     call = mqtt_publish_mock[-1]
     payload = json.loads(call["payload"])
     assert payload["priority"] == 4
     assert payload["message"][0]["content"] == "Hi"
+
+
+@pytest.mark.asyncio
+async def test_multiple_printers_publish_to_correct_topic(mqtt_publish_mock):
+    """Ensure service routes jobs to the selected printer."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "one"})
+    await setup_print_service(hass, {"printer_name": "two"})
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print",
+        {"printer_name": "one", "message": [{"type": "text", "content": "A"}]},
+        blocking=True,
+    )
+    assert mqtt_publish_mock[-1]["topic"] == "print/pos/one/job"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print",
+        {"printer_name": "two", "message": [{"type": "text", "content": "B"}]},
+        blocking=True,
+    )
+    assert mqtt_publish_mock[-1]["topic"] == "print/pos/two/job"
 
