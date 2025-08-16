@@ -15,10 +15,24 @@ async def setup_print_service(hass: HomeAssistant, config: dict):
     async def handle_print(call):
         """Send simplified print data via MQTT."""
         job_id = call.data.get("job_id") or uuid.uuid4().hex
+        # Support both the new 'message' format and deprecated 'job'
+        message = call.data.get("message")
+        priority = call.data.get("priority")
+        if message is None and (job := call.data.get("job")):
+            if isinstance(job, str):
+                try:
+                    job = json.loads(job)
+                except json.JSONDecodeError:
+                    job = {}
+            message = job.get("message")
+            if priority is None:
+                priority = job.get("priority")
+        if priority is None:
+            priority = 5
         payload = {
             "job_id": job_id,
-            "priority": call.data.get("priority", 5),
-            "message": call.data["message"],
+            "priority": priority,
+            "message": message,
         }
         await mqtt.async_publish(
             hass,

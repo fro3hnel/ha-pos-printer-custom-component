@@ -1,7 +1,7 @@
 """Sensor platform for POS-Printer Bridge integration."""
 
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from homeassistant.core import HomeAssistant, callback, Event
@@ -141,7 +141,8 @@ class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
     def native_value(self) -> datetime | None:
         if self._timestamp is None:
             return None
-        return datetime.fromtimestamp(self._timestamp)
+        # Home Assistant expects timezone-aware datetimes
+        return datetime.fromtimestamp(self._timestamp, tz=timezone.utc)
 
     async def async_added_to_hass(self) -> None:
         self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
