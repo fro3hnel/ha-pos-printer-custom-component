@@ -1,5 +1,5 @@
 {
-    "$schema": "https://raw.githubusercontent.com/fro3hnel/hass-pos-printer-bridge/refs/heads/develop/job.schema.json",
+    "$schema": "https://github.com/fro3hnel/ha-pos-printer-custom-component/raw/refs/heads/main/schema/job.schema.json",
     "job_id": "weather-20250715",
     "priority": 5,
     "paper_width": 80,
