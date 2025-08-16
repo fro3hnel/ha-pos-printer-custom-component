@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -11,6 +12,9 @@ from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 
 from .const import DOMAIN
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
@@ -42,11 +46,14 @@ async def setup_print_service(hass: HomeAssistant, config: dict) -> None:
                 if len(printers) == 1:
                     target = next(iter(printers))
                 else:
-                    # No printer specified and multiple available
+                    _LOGGER.warning(
+                        "No printer_name specified and multiple printers available"
+                    )
                     return
 
             topics = printers.get(target)
             if not topics:
+                _LOGGER.warning("Unknown printer_name '%s'", target)
                 return
 
             publish_topic: str = topics["print_topic"]
@@ -103,6 +110,7 @@ async def unload_print_service(hass: HomeAssistant, config: dict) -> None:
 
     data = hass.data.get(DOMAIN)
     if not data:
+        _LOGGER.warning("No printers registered; unload skipped")
         return
 
     printers: dict[str, dict[str, Any]] = data.get("printers", {})

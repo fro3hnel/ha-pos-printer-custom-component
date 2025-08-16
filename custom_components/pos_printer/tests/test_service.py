@@ -77,7 +77,7 @@ async def test_print_service_with_job_publishes(mqtt_publish_mock):
     await hass.services.async_call(
         DOMAIN,
         "print",
-        {"printer_name": "printer", "job": job},
+        {"printer_name": "printer", "job": job, "message": job["message"]},
         blocking=True,
     )
     call = mqtt_publish_mock[-1]
@@ -108,4 +108,42 @@ async def test_multiple_printers_publish_to_correct_topic(mqtt_publish_mock):
         blocking=True,
     )
     assert mqtt_publish_mock[-1]["topic"] == "print/pos/two/job"
+
+
+@pytest.mark.asyncio
+async def test_warning_on_missing_printer_name(mqtt_publish_mock, caplog):
+    """Warn when printer_name is omitted and multiple printers exist."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "one"})
+    await setup_print_service(hass, {"printer_name": "two"})
+
+    with caplog.at_level("WARNING"):
+        await hass.services.async_call(
+            DOMAIN,
+            "print",
+            {"message": [{"type": "text", "content": "test"}]},
+            blocking=True,
+        )
+
+    assert not mqtt_publish_mock
+    assert "No printer_name specified" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_warning_on_unknown_printer(mqtt_publish_mock, caplog):
+    """Warn when an unknown printer_name is provided."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "one"})
+    await setup_print_service(hass, {"printer_name": "two"})
+
+    with caplog.at_level("WARNING"):
+        await hass.services.async_call(
+            DOMAIN,
+            "print",
+            {"printer_name": "three", "message": [{"type": "text", "content": "test"}]},
+            blocking=True,
+        )
+
+    assert not mqtt_publish_mock
+    assert "Unknown printer_name" in caplog.text
 

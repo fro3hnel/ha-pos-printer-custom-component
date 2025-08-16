@@ -13,6 +13,7 @@ print:
       example: 5
     message:
       description: "List of elements to print"
+      required: true
       example: |
         - type: text
           content: "Scan this code"
