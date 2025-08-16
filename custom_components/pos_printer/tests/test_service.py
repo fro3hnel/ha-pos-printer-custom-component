@@ -1,9 +1,14 @@
 """Tests for print service of POS-Printer Bridge."""
 import json
-import pytest
 from types import SimpleNamespace
-from custom_components.pos_printer.printer import setup_print_service
+
+import pytest
+
 from custom_components.pos_printer.const import DOMAIN
+from custom_components.pos_printer.printer import (
+    setup_print_service,
+    unload_print_service,
+)
 
 
 class FakeHass:
@@ -108,4 +113,23 @@ async def test_multiple_printers_publish_to_correct_topic(mqtt_publish_mock):
         blocking=True,
     )
     assert mqtt_publish_mock[-1]["topic"] == "print/pos/two/job"
+
+
+@pytest.mark.asyncio
+async def test_unload_print_service_removes_service(mqtt_publish_mock):
+    """Unload removes the print service when last printer is removed."""
+    hass = FakeHass()
+    config = {"printer_name": "printer"}
+    await setup_print_service(hass, config)
+
+    removed: list[tuple[str, str]] = []
+
+    def fake_remove(domain: str, service: str) -> None:
+        removed.append((domain, service))
+
+    hass.services.async_remove = fake_remove  # type: ignore[attr-defined]
+
+    await unload_print_service(hass, config)
+
+    assert (DOMAIN, "print") in removed
 

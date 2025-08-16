@@ -113,5 +113,5 @@ async def unload_print_service(hass: HomeAssistant, config: dict) -> None:
         unsub()
 
     if not printers:
-        await hass.services.async_remove(DOMAIN, "print")
+        hass.services.async_remove(DOMAIN, "print")
         hass.data.pop(DOMAIN)
