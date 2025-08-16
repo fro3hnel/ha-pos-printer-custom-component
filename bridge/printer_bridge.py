@@ -247,7 +247,7 @@ class BixolonPrinter:
                     if t == "text":
                         self._txt(
                             item["content"] + "\n",
-                            item.get("orientation", "left"),
+                            item.get("alignment", "left"),
                         )
                     elif t == "barcode":
                         self._print_barcode(item)

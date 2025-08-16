@@ -49,11 +49,11 @@
   },
 
   "$defs": {
-    "Orientation": {
-      "type": "string",
-      "enum": ["left", "center", "right"],
-      "default": "left"
-    },
+    "Alignment": {
+        "type": "string",
+        "enum": ["left", "center", "right"],
+        "default": "left"
+      },
 
     "MessageElement": {
       "oneOf": [
@@ -69,7 +69,7 @@
       "required": ["type", "content"],
       "properties": {
         "type": { "const": "text" },
-        "orientation": { "$ref": "#/$defs/Orientation" },
+        "alignment": { "$ref": "#/$defs/Alignment" },
         "content": { "type": "string" },
         "bold": { "type": "boolean" },
         "underline": { "type": "boolean" },
@@ -94,7 +94,6 @@
       "required": ["type", "content", "barcode_type"],
       "properties": {
         "type": { "const": "barcode" },
-        "orientation": { "$ref": "#/$defs/Orientation" },
         "content": { "type": "string" },
         "barcode_type": {
           "type": "string",
@@ -126,7 +125,7 @@
           "$comment": "2D barcode mode or model"
         },
         "alignment": {
-          "$ref": "#/$defs/Orientation",
+          "$ref": "#/$defs/Alignment",
           "$comment": "Horizontal alignment of barcode"
         },
         "textPosition": {
@@ -148,7 +147,7 @@
       "required": ["type", "content"],
       "properties": {
         "type": { "const": "image" },
-        "orientation": { "$ref": "#/$defs/Orientation" },
+        "alignment": { "$ref": "#/$defs/Alignment" },
         "content": {
           "type": "string",
           "contentEncoding": "base64",
