@@ -274,13 +274,13 @@ class BixolonPrinter:
 
     def _print_barcode(self, spec: dict[str, any]) -> None:
         """
-        spec keys:
-          - barcode_type: str  (z.B. 'ean13')
+        Specification keys:
+          - barcode_type: str (e.g., 'ean13')
           - content: str
-          - mode: int (für QR/2D barcodes)
+          - mode: int (for QR/2D barcodes)
           - height: int
           - width: int
-          - eccLevel: int oder single-char str
+          - eccLevel: int or single-character str
           - alignment: 'left'|'center'|'right'
           - textPosition: int
           - attribute: int
