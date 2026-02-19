@@ -5,6 +5,7 @@ from custom_components.pos_printer.sensor import (
     LastJobStatusSensor,
     LastJobIdSensor,
     LastStatusTimestampSensor,
+    LastBridgeLogSensor,
     JobErrorBinarySensor,
     SuccessfulJobsCounterSensor,
 )
@@ -38,6 +39,7 @@ async def test_sensors_update_states():
         LastJobStatusSensor("printer", "entry"),
         LastJobIdSensor("printer", "entry"),
         LastStatusTimestampSensor("printer", "entry"),
+        LastBridgeLogSensor("printer", "entry"),
         JobErrorBinarySensor("printer", "entry"),
         SuccessfulJobsCounterSensor("printer", "entry"),
     ]
@@ -46,10 +48,18 @@ async def test_sensors_update_states():
         await sensor.async_added_to_hass()
     event_data = {"status": "success", "job_id": "1", "timestamp": 1620000000}
     hass.bus.async_fire(f"{DOMAIN}.status", event_data)
+    log_event_data = {
+        "message": "worker online",
+        "level": "INFO",
+        "logger": "printer_bridge",
+        "timestamp": 1620000100,
+    }
+    hass.bus.async_fire(f"{DOMAIN}.bridge_log", log_event_data)
     await hass.async_block_till_done()
     assert sensors[0].state == "success"
     assert sensors[1].state == "1"
     assert sensors[2].native_value.timestamp() == 1620000000
-    assert sensors[3].is_on is False
-    assert sensors[4].state == 1
-
+    assert sensors[3].state == "worker online"
+    assert sensors[3].extra_state_attributes["level"] == "INFO"
+    assert sensors[4].is_on is False
+    assert sensors[5].state == 1

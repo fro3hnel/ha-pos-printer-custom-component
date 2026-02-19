@@ -57,3 +57,23 @@ async def test_update_entity_installs_exact_version(mqtt_publish_mock):
     assert call["topic"] == "print/pos/printer/update"
     payload = json.loads(call["payload"])
     assert payload["version"] == entity.latest_version
+
+
+@pytest.mark.asyncio
+async def test_update_entity_installs_requested_version(mqtt_publish_mock):
+    """Ensure update entity can publish an explicit target version."""
+    hass = FakeHass()
+    entity = BridgeUpdateEntity("printer", "entry")
+    entity.hass = hass
+    await entity.async_added_to_hass()
+
+    hass.bus.async_fire(f"{DOMAIN}.status", {"version": "0.1.0"})
+    await hass.async_block_till_done()
+    assert entity.installed_version == "0.1.0"
+
+    await entity.async_install("0.2.0", False)
+    assert mqtt_publish_mock, "mqtt.async_publish was not called"
+    call = mqtt_publish_mock[-1]
+    assert call["topic"] == "print/pos/printer/update"
+    payload = json.loads(call["payload"])
+    assert payload["version"] == "0.2.0"

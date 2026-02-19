@@ -16,6 +16,7 @@
       "last_job_status": "Status des letzten Druckauftrags",
       "last_job_id": "ID des letzten Druckauftrags",
       "last_status_update": "Zeitpunkt der letzten Statusmeldung",
+      "last_bridge_log": "Letzte Bridge-Logmeldung",
       "successful_jobs": "Anzahl erfolgreicher Druckaufträge"
     },
     "binary_sensor": {
@@ -25,7 +26,8 @@
       "bridge_update": "Bridge-Aktualisierung"
     },
     "button": {
-      "bridge_restart": "Bridge neu starten"
+      "bridge_restart": "Bridge neu starten",
+      "pi_software_update": "Pi-Software aktualisieren"
     },
     "state": {
       "success": "Erfolgreich",
@@ -45,7 +47,7 @@
     "services": {
       "print": {
         "name": "Druckauftrag senden",
-        "description": "Sendet einen Druckauftrag an den POS-Drucker.",
+        "description": "Baut und sendet einen Druckauftrag über GUI-Felder an den POS-Drucker.",
         "fields": {
           "job_id": {
             "name": "Auftrags-ID",
@@ -55,9 +57,109 @@
             "name": "Priorität",
             "description": "Druck-Priorität (0–9, 0 = höchste)."
           },
+          "paper_width": {
+            "name": "Papierbreite",
+            "description": "Papierbreite in mm."
+          },
+          "feed_after": {
+            "name": "Nachschub",
+            "description": "Zusätzliche Zeilenvorschübe nach dem Druck."
+          },
+          "expires": {
+            "name": "Ablauf",
+            "description": "Optionale Ablaufzeit in Sekunden."
+          },
+          "timestamp": {
+            "name": "Zeitstempel",
+            "description": "Optionaler ISO-8601-Zeitstempel."
+          },
+          "text_content": {
+            "name": "Textinhalt",
+            "description": "Inhalt des Textelements."
+          },
+          "text_alignment": {
+            "name": "Textausrichtung",
+            "description": "Ausrichtung des Textes."
+          },
+          "text_bold": {
+            "name": "Text fett",
+            "description": "Fetten Text aktivieren."
+          },
+          "text_underline": {
+            "name": "Text unterstrichen",
+            "description": "Unterstrichenen Text aktivieren."
+          },
+          "text_italic": {
+            "name": "Text kursiv",
+            "description": "Kursiven Text aktivieren."
+          },
+          "text_double_height": {
+            "name": "Text doppelte Höhe",
+            "description": "Text mit doppelter Höhe aktivieren."
+          },
+          "text_font": {
+            "name": "Textschriftart",
+            "description": "Textschriftart (A/B/C)."
+          },
+          "text_size": {
+            "name": "Textgröße",
+            "description": "Textgröße (1–8)."
+          },
+          "barcode_content": {
+            "name": "Barcode-Inhalt",
+            "description": "Nutzdaten des Barcodes."
+          },
+          "barcode_type": {
+            "name": "Barcode-Typ",
+            "description": "Typ des Barcodes."
+          },
+          "barcode_height": {
+            "name": "Barcode-Höhe",
+            "description": "Barcode-Höhe in Dots."
+          },
+          "barcode_width": {
+            "name": "Barcode-Breite",
+            "description": "Modulbreite des Barcodes."
+          },
+          "barcode_ecc_level": {
+            "name": "Barcode-ECC-Level",
+            "description": "QR-Fehlerkorrekturlevel."
+          },
+          "barcode_mode": {
+            "name": "Barcode-Modus",
+            "description": "2D-Barcode-Modus/Modell."
+          },
+          "barcode_alignment": {
+            "name": "Barcode-Ausrichtung",
+            "description": "Ausrichtung des Barcodes."
+          },
+          "barcode_text_position": {
+            "name": "Barcode-Textposition",
+            "description": "Position des Klarschrifttexts."
+          },
+          "barcode_attribute": {
+            "name": "Barcode-Attribut",
+            "description": "Zusätzliche Barcode-Attribute."
+          },
+          "image_content": {
+            "name": "Bildinhalt",
+            "description": "Bilddaten als Base64 oder Data-URI."
+          },
+          "image_alignment": {
+            "name": "Bildausrichtung",
+            "description": "Ausrichtung des Bildes."
+          },
+          "image_nv_key": {
+            "name": "Bild-NV-Key",
+            "description": "NV-Bildschlüssel (0–255)."
+          },
           "message": {
             "name": "Nachricht",
-            "description": "Liste der zu druckenden Elemente."
+            "description": "Optionale rohe Liste von Elementen (erweiterter Modus)."
+          },
+          "job": {
+            "name": "Legacy-Auftrag",
+            "description": "Veraltetes Kompatibilitätsfeld für ein vollständiges Auftragsobjekt."
           }
         }
       },
@@ -67,11 +169,10 @@
         "fields": {
           "job": {
             "name": "Auftrag",
-            "description": "Auftrags-JSON entsprechend job.schema.json"
+            "description": "Auftragsobjekt entsprechend job.schema.json"
           }
         }
       }
     }
   }
 }
-

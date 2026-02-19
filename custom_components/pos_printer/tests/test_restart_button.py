@@ -1,5 +1,5 @@
 import pytest
-from custom_components.pos_printer.button import RestartButton
+from custom_components.pos_printer.button import PiSoftwareUpdateButton, RestartButton
 
 
 class FakeHass:
@@ -28,4 +28,16 @@ async def test_restart_button_publishes_command(mqtt_publish_mock):
     assert mqtt_publish_mock, "mqtt.async_publish was not called"
     call = mqtt_publish_mock[-1]
     assert call["topic"] == "print/pos/printer/restart"
+    assert call["payload"] == ""
+
+
+@pytest.mark.asyncio
+async def test_pi_update_button_publishes_command(mqtt_publish_mock):
+    hass = FakeHass()
+    button = PiSoftwareUpdateButton("printer", "entry")
+    button.hass = hass
+    await button.async_press()
+    assert mqtt_publish_mock, "mqtt.async_publish was not called"
+    call = mqtt_publish_mock[-1]
+    assert call["topic"] == "print/pos/printer/pi_update"
     assert call["payload"] == ""

@@ -36,6 +36,7 @@ import os
 import queue
 import signal
 import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -85,6 +86,32 @@ class Config:
 CFG = Config()
 logging.basicConfig(level=getattr(logging, CFG.log_level.upper()))
 LOGGER = logging.getLogger("printer_bridge")
+
+
+class MQTTLogHandler(logging.Handler):
+    """Publish bridge logs to MQTT so Home Assistant can consume them."""
+
+    def __init__(self, client: mqtt.Client, topic: str, printer_name: str) -> None:
+        super().__init__()
+        self._client = client
+        self._topic = topic
+        self._printer_name = printer_name
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            payload = {
+                "printer_name": self._printer_name,
+                "timestamp": int(record.created),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+                "file": record.filename,
+                "line": record.lineno,
+            }
+            self._client.publish(self._topic, json.dumps(payload), qos=0, retain=False)
+        except Exception:
+            # Never let telemetry logging break bridge execution.
+            pass
 
 
 class RedisSpool:
@@ -363,7 +390,9 @@ class BixolonPrinter:
 class MQTTBridge:
     SUB_TOPIC = f"print/pos/{CFG.printer_name}/job"
     PUB_TOPIC = f"print/pos/{CFG.printer_name}/ack"
+    LOG_TOPIC = f"print/pos/{CFG.printer_name}/log"
     UPDATE_TOPIC = f"print/pos/{CFG.printer_name}/update"
+    PI_UPDATE_TOPIC = f"print/pos/{CFG.printer_name}/pi_update"
     RESTART_TOPIC = f"print/pos/{CFG.printer_name}/restart"
 
     def __init__(self, printer: BixolonPrinter, spool: RedisSpool):
@@ -373,8 +402,12 @@ class MQTTBridge:
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         self.client.message_callback_add(self.UPDATE_TOPIC, self._on_update)
+        self.client.message_callback_add(self.PI_UPDATE_TOPIC, self._on_pi_update)
         self.client.message_callback_add(self.RESTART_TOPIC, self._on_restart)
         self._stop = threading.Event()
+        self._log_handler = MQTTLogHandler(self.client, self.LOG_TOPIC, CFG.printer_name)
+        self._log_handler.setLevel(getattr(logging, CFG.log_level.upper(), logging.INFO))
+        LOGGER.addHandler(self._log_handler)
 
     # ---------------- public API ----------------
     def start(self):
@@ -386,19 +419,23 @@ class MQTTBridge:
     def stop(self):
         self._stop.set()
         self.client.loop_stop()
+        LOGGER.removeHandler(self._log_handler)
+        self._log_handler.close()
 
     # ---------------- callbacks ----------------
     def _on_connect(self, cli, _userdata, _flags, rc):  # noqa: D401,N802
         if rc == 0:
             cli.subscribe(self.SUB_TOPIC, qos=1)
             cli.subscribe(self.UPDATE_TOPIC, qos=1)
+            cli.subscribe(self.PI_UPDATE_TOPIC, qos=1)
             cli.subscribe(self.RESTART_TOPIC, qos=1)
             self._publish_bridge_announcement()
             self._publish_discovery()
             LOGGER.info(
-                "MQTT connected; subscribed to %s, %s and %s",
+                "MQTT connected; subscribed to %s, %s, %s and %s",
                 self.SUB_TOPIC,
                 self.UPDATE_TOPIC,
+                self.PI_UPDATE_TOPIC,
                 self.RESTART_TOPIC,
             )
         else:
@@ -420,19 +457,65 @@ class MQTTBridge:
     def _on_update(self, _cli, _userdata, msg):  # noqa: D401
         """Handle update commands."""
         try:
-            payload = json.loads(msg.payload)
-            version = payload.get("version")
-            if version:
-                repo = (
-                    f"git+{REPO_URL}@{version}#subdirectory=bridge"
-                )
-                subprocess.run(["pip", "install", repo], check=False)
-                LOGGER.info("Update command received for version %s", version)
-                self._restart()
-            else:
-                LOGGER.error("Update message missing version")
+            payload = json.loads(msg.payload) if msg.payload else {}
+            version = str(payload.get("version", "")).strip()
+            threading.Thread(
+                target=self._perform_bridge_update,
+                args=(version,),
+                daemon=True,
+            ).start()
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Failed to process update message: %s", exc, exc_info=True)
+
+    def _perform_bridge_update(self, version: str) -> None:
+        """Install a bridge update and reboot the Pi if successful."""
+        if not version:
+            LOGGER.error("Update message missing version")
+            return
+        repo = f"git+{REPO_URL}@{version}#subdirectory=bridge"
+        cmd = [sys.executable, "-m", "pip", "install", "--upgrade", repo]
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            LOGGER.error(
+                "Bridge update failed (rc=%s): %s",
+                result.returncode,
+                (result.stderr or result.stdout).strip(),
+            )
+            return
+        LOGGER.info("Update command received for version %s", version)
+        self._restart()
+
+    def _on_pi_update(self, _cli, _userdata, _msg):  # noqa: D401
+        """Handle Raspberry Pi software update commands."""
+        LOGGER.info("Pi software update command received")
+        threading.Thread(target=self._perform_pi_update, daemon=True).start()
+
+    def _perform_pi_update(self) -> None:
+        """Run apt update/upgrade to update Raspberry Pi software."""
+        env = dict(os.environ)
+        env["DEBIAN_FRONTEND"] = "noninteractive"
+        commands = [
+            ["sudo", "apt-get", "update"],
+            ["sudo", "apt-get", "upgrade", "-y"],
+            ["sudo", "apt-get", "autoremove", "-y"],
+        ]
+        for cmd in commands:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            if result.returncode != 0:
+                LOGGER.error(
+                    "Pi software update command failed (%s, rc=%s): %s",
+                    " ".join(cmd),
+                    result.returncode,
+                    (result.stderr or result.stdout).strip(),
+                )
+                return
+        LOGGER.info("Pi software update completed successfully")
 
     def _on_restart(self, _cli, _userdata, _msg):  # noqa: D401
         """Handle restart commands."""
@@ -559,4 +642,3 @@ def main():  # noqa: D401
 
 if __name__ == "__main__":
     main()
-

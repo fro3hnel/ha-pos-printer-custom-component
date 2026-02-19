@@ -49,6 +49,7 @@ async def async_setup_entry(
         LastJobStatusSensor(printer_name, entry_id),
         LastJobIdSensor(printer_name, entry_id),
         LastStatusTimestampSensor(printer_name, entry_id),
+        LastBridgeLogSensor(printer_name, entry_id),
         SuccessfulJobsCounterSensor(printer_name, entry_id),
     ]
 
@@ -207,6 +208,55 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
 
 
 
+class LastBridgeLogSensor(PosPrinterEntity, SensorEntity):
+    """Sensor showing the latest bridge log message received via MQTT."""
+
+    _attr_translation_key = "last_bridge_log"
+    _attr_translation_domain = DOMAIN
+    _attr_icon = "mdi:text-box-search-outline"
+
+    def __init__(self, printer_name: str, entry_id: str) -> None:
+        super().__init__(printer_name, entry_id)
+        self._attr_name = f"{printer_name} Last Bridge Log"
+        self._attr_unique_id = f"{entry_id}_last_bridge_log"
+        self._message: str | None = None
+        self._attrs: dict[str, str | int] = {}
+
+    @property
+    def native_value(self) -> str | None:
+        return self._message
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | int]:
+        return self._attrs
+
+    async def async_added_to_hass(self) -> None:
+        self.hass.bus.async_listen(f"{DOMAIN}.bridge_log", self._handle_event)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if hasattr(self, "_unsub"):
+            self._unsub()
+
+    @callback
+    def _handle_event(self, event: Event) -> None:
+        message = event.data.get("message")
+        if message is None:
+            return
+
+        self._message = str(message)
+        attrs: dict[str, str | int] = {}
+        if (level := event.data.get("level")) is not None:
+            attrs["level"] = str(level)
+        if (logger_name := event.data.get("logger")) is not None:
+            attrs["logger"] = str(logger_name)
+        if (timestamp := event.data.get("timestamp")) is not None:
+            attrs["timestamp"] = int(timestamp)
+        self._attrs = attrs
+
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
+
+
 class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
     """Sensor counting the number of successful print jobs."""
 
@@ -238,4 +288,3 @@ class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
             if self.hass and self.entity_id:
                 self.async_write_ha_state()
             
-

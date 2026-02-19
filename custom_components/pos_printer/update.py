@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Use component version from manifest
 _COMPONENT_VERSION: str = VERSION
+_RELEASE_URL = "https://github.com/fro3hnel/ha-pos-printer-custom-component/releases"
 
 
 async def async_setup_entry(
@@ -42,6 +43,7 @@ class BridgeUpdateEntity(PosPrinterEntity, UpdateEntity):
     _attr_icon = "mdi:update"
     _attr_supported_features = UpdateEntityFeature.INSTALL
     _attr_has_entity_name = True
+    _attr_release_url = _RELEASE_URL
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
         super().__init__(printer_name, entry_id)
@@ -49,6 +51,7 @@ class BridgeUpdateEntity(PosPrinterEntity, UpdateEntity):
         self._attr_unique_id = f"{entry_id}_bridge_update"
         self._installed_version: str | None = None
         self._latest_version: str = _COMPONENT_VERSION
+        self._unsub = None
 
     @property
     def installed_version(self) -> str | None:
@@ -60,13 +63,24 @@ class BridgeUpdateEntity(PosPrinterEntity, UpdateEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register event listener for heartbeat messages."""
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
+        self._unsub = self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Clean up listener on removal."""
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
 
     @callback
     def _handle_event(self, event: Event) -> None:
         """Handle status or heartbeat events to extract version."""
         heartbeat: dict[str, Any] | None = event.data.get("heartbeat")
-        if heartbeat and (version := heartbeat.get("version")):
+        version = (
+            heartbeat.get("version")
+            if heartbeat
+            else event.data.get("version")
+        )
+        if version:
             if version != self._installed_version:
                 self._installed_version = str(version)
                 if self.hass and self.entity_id:

@@ -15,6 +15,7 @@
       "last_job_status": "Status of last print job",
       "last_job_id": "ID of last print job",
       "last_status_update": "Last status update",
+      "last_bridge_log": "Last bridge log message",
       "successful_jobs": "Successful print jobs"
     },
     "binary_sensor": {
@@ -24,7 +25,8 @@
       "bridge_update": "Bridge update"
     },
     "button": {
-      "bridge_restart": "Restart bridge"
+      "bridge_restart": "Restart bridge",
+      "pi_software_update": "Update Pi software"
     },
     "state": {
       "success": "Success",
@@ -44,21 +46,45 @@
     "services": {
       "print": {
         "name": "Send print job",
-        "description": "Send a print job to the POS printer.",
+        "description": "Build and send a print job to the POS printer via GUI fields.",
         "fields": {
           "job_id": {"name": "Job ID", "description": "Unique job identifier."},
           "priority": {"name": "Priority", "description": "Print priority (0-9, 0 = highest)."},
-          "message": {"name": "Message", "description": "List of elements to print."}
+          "paper_width": {"name": "Paper width", "description": "Paper width in mm."},
+          "feed_after": {"name": "Feed after", "description": "Additional line feeds after printing."},
+          "expires": {"name": "Expires", "description": "Optional expiry in seconds."},
+          "timestamp": {"name": "Timestamp", "description": "Optional ISO-8601 timestamp."},
+          "text_content": {"name": "Text content", "description": "Text element content."},
+          "text_alignment": {"name": "Text alignment", "description": "Text alignment."},
+          "text_bold": {"name": "Text bold", "description": "Enable bold text."},
+          "text_underline": {"name": "Text underline", "description": "Enable underlined text."},
+          "text_italic": {"name": "Text italic", "description": "Enable italic text."},
+          "text_double_height": {"name": "Text double height", "description": "Enable double-height text."},
+          "text_font": {"name": "Text font", "description": "Text font (A/B/C)."},
+          "text_size": {"name": "Text size", "description": "Text size (1-8)."},
+          "barcode_content": {"name": "Barcode content", "description": "Barcode payload."},
+          "barcode_type": {"name": "Barcode type", "description": "Barcode type."},
+          "barcode_height": {"name": "Barcode height", "description": "Barcode height in dots."},
+          "barcode_width": {"name": "Barcode width", "description": "Barcode module width."},
+          "barcode_ecc_level": {"name": "Barcode ECC level", "description": "QR error correction level."},
+          "barcode_mode": {"name": "Barcode mode", "description": "2D barcode mode/model."},
+          "barcode_alignment": {"name": "Barcode alignment", "description": "Barcode alignment."},
+          "barcode_text_position": {"name": "Barcode text position", "description": "Human-readable text position."},
+          "barcode_attribute": {"name": "Barcode attribute", "description": "Additional barcode attributes."},
+          "image_content": {"name": "Image content", "description": "Image payload as Base64 or data URI."},
+          "image_alignment": {"name": "Image alignment", "description": "Image alignment."},
+          "image_nv_key": {"name": "Image NV key", "description": "NV image key (0-255)."},
+          "message": {"name": "Message", "description": "Optional raw list of elements (advanced mode)."},
+          "job": {"name": "Legacy job", "description": "Deprecated compatibility field for full job object."}
         }
       },
       "print_job": {
         "name": "Send full job",
         "description": "Send a complete job object to the POS printer.",
         "fields": {
-          "job": {"name": "Job", "description": "Job JSON matching job.schema.json"}
+          "job": {"name": "Job", "description": "Job object matching job.schema.json"}
         }
       }
     }
   }
 }
-

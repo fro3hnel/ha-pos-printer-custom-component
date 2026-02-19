@@ -1,0 +1,19 @@
+[Unit]
+Description=POS Printer Bridge
+After=network-online.target redis-server.service
+Wants=network-online.target redis-server.service
+
+[Service]
+Type=simple
+User=posprinter
+Group=posprinter
+SupplementaryGroups=plugdev dialout
+WorkingDirectory=/opt/pos-printer-bridge
+EnvironmentFile=/etc/default/pos-printer-bridge
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/pos-printer-bridge/printer_bridge.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

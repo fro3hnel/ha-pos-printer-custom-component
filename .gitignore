@@ -379,3 +379,6 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/python,jetbrains,visualstudiocode,macos,windows,linux
+
+# pi-gen builder workspace
+pi-gen-builder/.work/
