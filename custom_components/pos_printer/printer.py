@@ -71,6 +71,38 @@ def _build_text_element(data: dict[str, Any]) -> dict[str, Any] | None:
     return element
 
 
+def _build_text_line_elements(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build text elements from a multi-line text field."""
+    raw_lines = data.get("text_lines")
+    if raw_lines in (None, ""):
+        return []
+
+    lines = str(raw_lines).splitlines()
+    if not any(line.strip() for line in lines):
+        return []
+
+    elements: list[dict[str, Any]] = []
+    for line in lines:
+        content = line if line else " "
+        element: dict[str, Any] = {"type": "text", "content": content}
+        if (alignment := data.get("text_alignment")) is not None:
+            element["alignment"] = alignment
+        if data.get("text_bold"):
+            element["bold"] = True
+        if data.get("text_underline"):
+            element["underline"] = True
+        if data.get("text_italic"):
+            element["italic"] = True
+        if data.get("text_double_height"):
+            element["double_height"] = True
+        if (font := data.get("text_font")) is not None:
+            element["font"] = font
+        if (size := data.get("text_size")) is not None:
+            element["size"] = size
+        elements.append(element)
+    return elements
+
+
 def _build_barcode_element(data: dict[str, Any]) -> dict[str, Any] | None:
     """Build a barcode element from GUI fields."""
     content = data.get("barcode_content")
@@ -117,7 +149,10 @@ def _build_image_element(data: dict[str, Any]) -> dict[str, Any] | None:
 def _build_message_from_gui_fields(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Create message list from dedicated GUI fields."""
     message: list[dict[str, Any]] = []
-    for builder in (_build_text_element, _build_barcode_element, _build_image_element):
+    if element := _build_text_element(data):
+        message.append(element)
+    message.extend(_build_text_line_elements(data))
+    for builder in (_build_barcode_element, _build_image_element):
         if element := builder(data):
             message.append(element)
     return message

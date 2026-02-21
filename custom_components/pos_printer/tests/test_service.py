@@ -178,6 +178,46 @@ async def test_print_service_builds_message_from_gui_fields(mqtt_publish_mock):
 
 
 @pytest.mark.asyncio
+async def test_print_service_builds_text_elements_from_text_lines(mqtt_publish_mock):
+    """Test building multiple text elements from text_lines."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "printer"})
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print",
+        {
+            "text_lines": "Line 1\n\nLine 3",
+            "text_alignment": "center",
+            "text_bold": True,
+        },
+        blocking=True,
+    )
+
+    payload = json.loads(mqtt_publish_mock[-1]["payload"])
+    assert payload["message"] == [
+        {
+            "type": "text",
+            "content": "Line 1",
+            "alignment": "center",
+            "bold": True,
+        },
+        {
+            "type": "text",
+            "content": " ",
+            "alignment": "center",
+            "bold": True,
+        },
+        {
+            "type": "text",
+            "content": "Line 3",
+            "alignment": "center",
+            "bold": True,
+        },
+    ]
+
+
+@pytest.mark.asyncio
 async def test_print_service_supports_legacy_job_json(mqtt_publish_mock):
     """Test compatibility with deprecated job JSON passed to print."""
     hass = FakeHass()

@@ -3,122 +3,130 @@ print:
   description: "Build and send a print job fully via UI fields (text, barcode, image)."
   fields:
     printer_name:
-      description: "Name of the target printer (required when multiple printers are configured)"
+      name: "Printer"
+      description: "Name of the target printer (required when multiple printers are configured)."
       example: "kitchen_printer"
       selector:
         text:
     job_id:
-      description: "Optional job identifier"
+      name: "Job ID"
+      description: "Optional job identifier."
       example: "abc123"
       selector:
         text:
     priority:
-      description: "Print priority (0-9, 0 = highest)"
+      name: "Priority"
+      description: "Print priority (0-9, 0 = highest)."
       example: 5
       default: 5
       selector:
         number:
           min: 0
           max: 9
-          mode: box
+          step: 1
     paper_width:
-      description: "Paper width in mm"
+      name: "Paper Width"
+      description: "Paper width in mm."
       example: 80
       default: 80
-      advanced: true
       selector:
-        select:
-          options:
-            - label: "80 mm"
-              value: 80
-            - label: "53 mm"
-              value: 53
-          mode: dropdown
+        number:
+          min: 53
+          max: 80
+          step: 1
     feed_after:
-      description: "Additional line feeds after printing"
+      name: "Feed After"
+      description: "Additional line feeds after printing."
       example: 4
-      advanced: true
       selector:
         number:
           min: 0
-          mode: box
+          step: 1
     expires:
-      description: "Optional expiry in seconds"
+      name: "Expires"
+      description: "Optional expiry in seconds."
       example: 60
-      advanced: true
       selector:
         number:
           min: 1
-          mode: box
+          step: 1
     timestamp:
-      description: "Optional timestamp (ISO-8601)"
+      name: "Timestamp"
+      description: "Optional timestamp (ISO-8601)."
       example: "2026-02-19T16:45:00+01:00"
-      advanced: true
       selector:
         text:
     text_content:
-      description: "Text content. If set, a text message element is added."
+      name: "Text Content"
+      description: "Single text block. If set, one text element is added."
       example: "Hello, World!"
       selector:
         text:
           multiline: true
+    text_lines:
+      name: "Text Lines"
+      description: "Multiple text lines. Each line becomes its own text element."
+      example: "Starter\nBurger\nTotal: 19.90 EUR"
+      selector:
+        text:
+          multiline: true
     text_alignment:
-      description: "Text alignment"
+      name: "Text Alignment"
+      description: "Text alignment for text fields."
       example: "center"
       default: "left"
-      advanced: true
       selector:
         select:
           options:
             - "left"
             - "center"
             - "right"
-          mode: dropdown
     text_bold:
-      description: "Enable bold text"
-      advanced: true
+      name: "Text Bold"
+      description: "Enable bold text."
       selector:
         boolean:
     text_underline:
-      description: "Enable underlined text"
-      advanced: true
+      name: "Text Underline"
+      description: "Enable underlined text."
       selector:
         boolean:
     text_italic:
-      description: "Enable italic text"
-      advanced: true
+      name: "Text Italic"
+      description: "Enable italic text."
       selector:
         boolean:
     text_double_height:
-      description: "Enable double-height text"
-      advanced: true
+      name: "Text Double Height"
+      description: "Enable double-height text."
       selector:
         boolean:
     text_font:
-      description: "Font for text elements"
-      advanced: true
+      name: "Text Font"
+      description: "Font for text elements."
       selector:
         select:
           options:
             - "A"
             - "B"
             - "C"
-          mode: dropdown
     text_size:
-      description: "Text size (1-8)"
-      advanced: true
+      name: "Text Size"
+      description: "Text size (1-8)."
       selector:
         number:
           min: 1
           max: 8
-          mode: box
+          step: 1
     barcode_content:
-      description: "Barcode payload. If set, a barcode message element is added."
+      name: "Barcode Content"
+      description: "Barcode payload. If set, a barcode element is added."
       example: "12345678"
       selector:
         text:
     barcode_type:
-      description: "Barcode type (required if barcode_content is set)"
+      name: "Barcode Type"
+      description: "Barcode type."
       default: "code128"
       selector:
         select:
@@ -131,27 +139,26 @@ print:
             - "code93"
             - "code128"
             - "qr-code"
-          mode: dropdown
     barcode_height:
-      description: "Barcode height in dots"
+      name: "Barcode Height"
+      description: "Barcode height in dots."
       example: 50
-      advanced: true
       selector:
         number:
           min: 0
-          mode: box
+          step: 1
     barcode_width:
-      description: "Barcode module width"
+      name: "Barcode Width"
+      description: "Barcode module width."
       example: 2
-      advanced: true
       selector:
         number:
           min: 1
           max: 20
-          mode: box
+          step: 1
     barcode_ecc_level:
-      description: "QR error correction level"
-      advanced: true
+      name: "Barcode ECC Level"
+      description: "QR error correction level."
       selector:
         select:
           options:
@@ -159,60 +166,58 @@ print:
             - "M"
             - "Q"
             - "H"
-          mode: dropdown
     barcode_mode:
-      description: "2D barcode mode/model"
-      advanced: true
+      name: "Barcode Mode"
+      description: "2D barcode mode/model."
       selector:
         number:
           min: 0
-          mode: box
+          step: 1
     barcode_alignment:
-      description: "Barcode alignment"
-      advanced: true
+      name: "Barcode Alignment"
+      description: "Barcode alignment."
       selector:
         select:
           options:
             - "left"
             - "center"
             - "right"
-          mode: dropdown
     barcode_text_position:
-      description: "Human-readable text position"
-      advanced: true
+      name: "Barcode Text Position"
+      description: "Human-readable text position."
       selector:
         number:
           min: 0
-          mode: box
+          step: 1
     barcode_attribute:
-      description: "Additional barcode attributes"
-      advanced: true
+      name: "Barcode Attribute"
+      description: "Additional barcode attributes."
       selector:
         number:
           min: 0
-          mode: box
+          step: 1
     image_content:
+      name: "Image Content"
       description: "Image payload as Base64 or data URI. If set, an image element is added."
       selector:
         text:
           multiline: true
     image_alignment:
-      description: "Image alignment"
+      name: "Image Alignment"
+      description: "Image alignment."
       default: "left"
-      advanced: true
       selector:
         select:
           options:
             - "left"
             - "center"
             - "right"
-          mode: dropdown
     image_nv_key:
-      description: "NV image key (0-255)"
+      name: "Image NV Key"
+      description: "NV image key (0-255)."
       default: 1
-      advanced: true
       selector:
         number:
           min: 0
           max: 255
-          mode: box
+          step: 1

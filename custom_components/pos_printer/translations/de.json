@@ -80,6 +80,10 @@
             "name": "Textinhalt",
             "description": "Inhalt des Textelements."
           },
+          "text_lines": {
+            "name": "Textzeilen",
+            "description": "Mehrere Zeilen; jede Zeile wird ein eigenes Textelement."
+          },
           "text_alignment": {
             "name": "Textausrichtung",
             "description": "Ausrichtung des Textes."

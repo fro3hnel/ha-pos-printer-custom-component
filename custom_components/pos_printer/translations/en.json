@@ -80,6 +80,10 @@
             "name": "Text content",
             "description": "Text element content."
           },
+          "text_lines": {
+            "name": "Text lines",
+            "description": "Multiple lines; each line becomes one text element."
+          },
           "text_alignment": {
             "name": "Text alignment",
             "description": "Text alignment."

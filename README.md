@@ -32,7 +32,7 @@ After setup, you can adjust the printer name via **Configure** on the integratio
 ### Service Fields for `print`
 - `printer_name`: Target printer (required if more than one printer is configured).
 - Job fields: `job_id`, `priority`, `paper_width`, `feed_after`, `expires`, `timestamp`.
-- Text element fields: `text_content`, `text_alignment`, `text_bold`, `text_underline`, `text_italic`, `text_double_height`, `text_font`, `text_size`.
+- Text element fields: `text_content`, `text_lines`, `text_alignment`, `text_bold`, `text_underline`, `text_italic`, `text_double_height`, `text_font`, `text_size`.
 - Barcode element fields: `barcode_content`, `barcode_type`, `barcode_height`, `barcode_width`, `barcode_ecc_level`, `barcode_mode`, `barcode_alignment`, `barcode_text_position`, `barcode_attribute`.
 - Image element fields: `image_content` (Base64/Data-URI), `image_alignment`, `image_nv_key`.
 
@@ -42,7 +42,10 @@ service: pos_printer.print
 data:
   printer_name: kitchen_printer
   priority: 4
-  text_content: "Scan this code"
+  text_lines: |
+    Table 7
+    2x Burger
+    Total: 19.90 EUR
   text_alignment: center
   barcode_content: "012345678905"
   barcode_type: ean13
