@@ -150,7 +150,7 @@
           },
           "image_content": {
             "name": "Bildinhalt",
-            "description": "Bilddaten als Base64 oder Data-URI."
+            "description": "Bilddaten als Base64, Data-URI oder URI."
           },
           "image_alignment": {
             "name": "Bildausrichtung",

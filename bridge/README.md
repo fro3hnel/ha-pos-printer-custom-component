@@ -63,6 +63,7 @@ LOG_LEVEL=INFO
 HEARTBEAT_INTERVAL=60
 LEFT_MARGIN=0
 DEFAULT_WIDTH=80
+IMAGE_FETCH_TIMEOUT=10
 ```
 
 Optional printer defaults (left margin, width) can be set here as well.

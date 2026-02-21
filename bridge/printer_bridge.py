@@ -26,10 +26,12 @@ LOG_LEVEL=INFO
 HEARTBEAT_INTERVAL=60
 LEFT_MARGIN=0
 DEFAULT_WIDTH=80
+IMAGE_FETCH_TIMEOUT=10
 """
 from __future__ import annotations
 
 import base64
+import binascii
 import io
 import json
 import logging
@@ -41,6 +43,8 @@ import sys
 import tempfile
 import threading
 import time
+from urllib.parse import unquote_to_bytes, urlparse
+from urllib.request import Request, urlopen
 from ctypes import (
     CDLL,
     POINTER,
@@ -87,10 +91,55 @@ class Config:
     heartbeat_interval: int = int(os.getenv("HEARTBEAT_INTERVAL", 60))
     left_margin: int = int(os.getenv("LEFT_MARGIN", 0))
     default_width: int = int(os.getenv("DEFAULT_WIDTH", 80))
+    image_fetch_timeout: int = int(os.getenv("IMAGE_FETCH_TIMEOUT", 10))
 
 CFG = Config()
 logging.basicConfig(level=getattr(logging, CFG.log_level.upper()))
 LOGGER = logging.getLogger("printer_bridge")
+
+
+def _decode_data_uri(content: str) -> bytes:
+    """Decode a data URI into raw image bytes."""
+    if "," not in content:
+        raise ValueError("Data URI is missing comma separator")
+    header, payload = content.split(",", 1)
+    if ";base64" in header.lower():
+        try:
+            return base64.b64decode(payload, validate=True)
+        except binascii.Error as exc:
+            raise ValueError("Invalid base64 payload in data URI") from exc
+    return unquote_to_bytes(payload)
+
+
+def _fetch_image_from_uri(uri: str, timeout: int) -> bytes:
+    """Download image bytes from a URI."""
+    request = Request(uri, headers={"User-Agent": "ha-pos-printer-bridge/0.1.0"})
+    with urlopen(request, timeout=timeout) as response:  # nosec B310
+        return response.read()
+
+
+def _load_image_bytes(content: str, timeout: int) -> bytes:
+    """Load image bytes from Base64, data URI, or URI string."""
+    source = content.strip()
+    if not source:
+        raise ValueError("Image content is empty")
+
+    if source.startswith("data:"):
+        return _decode_data_uri(source)
+
+    parsed = urlparse(source)
+    if parsed.scheme in {"http", "https", "file"}:
+        data = _fetch_image_from_uri(source, timeout=timeout)
+        if not data:
+            raise ValueError("URI returned empty image payload")
+        return data
+
+    try:
+        return base64.b64decode(source, validate=True)
+    except binascii.Error as exc:
+        raise ValueError(
+            "Image content must be Base64, data URI, or URI (http/https/file)"
+        ) from exc
 
 
 class MQTTLogHandler(logging.Handler):
@@ -341,50 +390,42 @@ class BixolonPrinter:
 
     def _print_image(self, spec: dict[str, Any], paper_w: int) -> None:
         """
-        Prints an image provided as a Base64-encoded string in spec['content'].
+        Print an image from Base64, data URI, or URI in spec['content'].
         Uses NV image functions: DownloadNVImage, PrintNVImage, RemoveNVImage.
         """
-        # extract and decode base64
-        b64 = spec["content"]
-        if b64.startswith("data:"):
-            b64 = b64.split(",", 1)[1]
-        try:
-            image_data = base64.b64decode(b64)
-        except Exception as exc:
-            raise ValueError("Base64 decode failed") from exc
+        del paper_w  # reserved for future image sizing support
 
-        # robustly load image into memory and convert
-        buf = io.BytesIO(image_data)
+        raw_content = spec.get("content")
+        if not isinstance(raw_content, str):
+            raise ValueError("Image content must be a string")
+
+        image_data = _load_image_bytes(raw_content, timeout=CFG.image_fetch_timeout)
+
         try:
-            with Image.open(buf) as img:
-                img.load()  # ensure full image is loaded
-                img = img.convert("RGB")
+            with Image.open(io.BytesIO(image_data)) as image:
+                image.load()
+                img_rgb = image.convert("RGB")
         except Exception as exc:
             raise ValueError("Image load/convert failed") from exc
 
-        # save as BMP to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".bmp") as tmpf:
-            img.save(tmpf, format="BMP")
-            tmp_path = tmpf.name
-
-        # choose NV key (default 1)
         key = spec.get("nv_key", 1)
+        tmp_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".bmp") as tmpf:
+                img_rgb.save(tmpf, format="BMP")
+                tmp_path = tmpf.name
 
-        # download to printer NV storage
-        if self.lib.DownloadNVImage(tmp_path.encode(), c_ubyte(key)) != 0:
-            raise RuntimeError(
-                f"DownloadNVImage failed for key {key} (temp file {tmp_path})"
-            )
+            if self.lib.DownloadNVImage(tmp_path.encode(), c_ubyte(key)) != 0:
+                raise RuntimeError(
+                    f"DownloadNVImage failed for key {key} (temp file {tmp_path})"
+                )
 
-        # print the NV-stored image
-        if self.lib.PrintNVImage(c_ubyte(key)) != 0:
-            raise RuntimeError(f"PrintNVImage failed for key {key}")
-
-        # remove from NV storage to free memory
-        self.lib.RemoveNVImage(c_ubyte(key))
-
-        # cleanup temp file
-        os.remove(tmp_path)
+            if self.lib.PrintNVImage(c_ubyte(key)) != 0:
+                raise RuntimeError(f"PrintNVImage failed for key {key}")
+        finally:
+            self.lib.RemoveNVImage(c_ubyte(key))
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     # ---------------- status ----------------
     def get_status(self) -> int:

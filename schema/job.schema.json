@@ -150,8 +150,21 @@
         "alignment": { "$ref": "#/$defs/Alignment" },
         "content": {
           "type": "string",
-          "contentEncoding": "base64",
-          "contentMediaType": "image/png"
+          "minLength": 1,
+          "anyOf": [
+            {
+              "pattern": "^data:image\\/[^,]+,.+$",
+              "$comment": "Data URI, e.g. data:image/png;base64,..."
+            },
+            {
+              "pattern": "^(https?|file):\\/\\/.+$",
+              "$comment": "URI source, e.g. https://... or file:///..."
+            },
+            {
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "$comment": "Raw Base64-encoded image payload"
+            }
+          ]
         },
         "nv_key": {
           "type": "integer",

@@ -150,7 +150,7 @@
           },
           "image_content": {
             "name": "Image content",
-            "description": "Image payload as Base64 or data URI."
+            "description": "Image payload as Base64, data URI, or URI."
           },
           "image_alignment": {
             "name": "Image alignment",

@@ -198,7 +198,7 @@ print:
           step: 1
     image_content:
       name: "Image Content"
-      description: "Image payload as Base64 or data URI. If set, an image element is added."
+      description: "Image payload as Base64, data URI, or URI. If set, an image element is added."
       selector:
         text:
           multiline: true

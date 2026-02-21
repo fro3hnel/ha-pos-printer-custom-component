@@ -34,7 +34,7 @@ After setup, you can adjust the printer name via **Configure** on the integratio
 - Job fields: `job_id`, `priority`, `paper_width`, `feed_after`, `expires`, `timestamp`.
 - Text element fields: `text_content`, `text_lines`, `text_alignment`, `text_bold`, `text_underline`, `text_italic`, `text_double_height`, `text_font`, `text_size`.
 - Barcode element fields: `barcode_content`, `barcode_type`, `barcode_height`, `barcode_width`, `barcode_ecc_level`, `barcode_mode`, `barcode_alignment`, `barcode_text_position`, `barcode_attribute`.
-- Image element fields: `image_content` (Base64/Data-URI), `image_alignment`, `image_nv_key`.
+- Image element fields: `image_content` (Base64/Data-URI/URI), `image_alignment`, `image_nv_key`.
 
 ### Example Service Call (`print`)
 ```yaml
