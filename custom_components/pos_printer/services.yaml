@@ -1,6 +1,6 @@
 print:
   name: "Print POS Job"
-  description: "Build and send a print job via GUI fields (text, barcode, image) or send a full job object."
+  description: "Build and send a print job fully via UI fields (text, barcode, image)."
   fields:
     printer_name:
       description: "Name of the target printer (required when multiple printers are configured)"
@@ -216,41 +216,3 @@ print:
           min: 0
           max: 255
           mode: box
-    message:
-      description: "Optional raw list of message elements (advanced compatibility mode)"
-      example: |
-        - type: text
-          content: "Scan this code"
-          alignment: center
-        - type: barcode
-          content: "012345678905"
-          barcode_type: ean13
-          alignment: center
-      advanced: true
-      selector:
-        object:
-    job:
-      description: "Deprecated compatibility field. Optional full job object."
-      advanced: true
-      selector:
-        object:
-
-print_job:
-  name: "Send Full POS Job"
-  description: "Send a full job object as defined in job.schema.json."
-  fields:
-    printer_name:
-      description: "Name of the target printer (required when multiple printers are configured)"
-      example: "kitchen_printer"
-      selector:
-        text:
-    job:
-      description: "Full job object (advanced mode)"
-      example: |
-        job_id: "abc123"
-        priority: 5
-        message:
-          - type: text
-            content: "Hello, World!"
-      selector:
-        object:

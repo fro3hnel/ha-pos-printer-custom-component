@@ -27,8 +27,7 @@ After setup, you can adjust the printer name via **Configure** on the integratio
 
 | Service | Description |
 |---|---|
-| `pos_printer.print` | Build and send a print job via GUI fields, or submit a full job object. |
-| `pos_printer.print_job` | Send a full job object directly (advanced mode). |
+| `pos_printer.print` | Build and send a print job fully via UI fields. |
 
 ### Service Fields for `print`
 - `printer_name`: Target printer (required if more than one printer is configured).
@@ -36,11 +35,6 @@ After setup, you can adjust the printer name via **Configure** on the integratio
 - Text element fields: `text_content`, `text_alignment`, `text_bold`, `text_underline`, `text_italic`, `text_double_height`, `text_font`, `text_size`.
 - Barcode element fields: `barcode_content`, `barcode_type`, `barcode_height`, `barcode_width`, `barcode_ecc_level`, `barcode_mode`, `barcode_alignment`, `barcode_text_position`, `barcode_attribute`.
 - Image element fields: `image_content` (Base64/Data-URI), `image_alignment`, `image_nv_key`.
-- Advanced compatibility: `message` (raw element list) and `job` (legacy full job object).
-
-### Service Fields for `print_job`
-- `printer_name`: Target printer (required if more than one printer is configured).
-- `job`: Full job object matching `job.schema.json`.
 
 ### Example Service Call (`print`)
 ```yaml
@@ -48,17 +42,11 @@ service: pos_printer.print
 data:
   printer_name: kitchen_printer
   priority: 4
-  message:
-    - type: text
-      content: "Scan this code"
-      alignment: center
-    - type: barcode
-      content: "012345678905"
-      barcode_type: ean13
-      alignment: center
-    - type: image
-      content: "iVBORw0KGgoAAAANSUhEUgAAAAUA"
-      nv_key: 1
+  text_content: "Scan this code"
+  text_alignment: center
+  barcode_content: "012345678905"
+  barcode_type: ean13
+  barcode_alignment: center
 ```
 
 ## Sensors

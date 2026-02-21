@@ -46,7 +46,7 @@
     "services": {
       "print": {
         "name": "Send print job",
-        "description": "Build and send a print job via GUI fields, or send a full job object.",
+        "description": "Build and send a print job fully via UI fields.",
         "fields": {
           "printer_name": {
             "name": "Printer",
@@ -155,28 +155,6 @@
           "image_nv_key": {
             "name": "Image NV key",
             "description": "NV image key (0-255)."
-          },
-          "message": {
-            "name": "Message",
-            "description": "Optional raw list of elements (advanced mode)."
-          },
-          "job": {
-            "name": "Legacy job",
-            "description": "Deprecated compatibility field for full job object."
-          }
-        }
-      },
-      "print_job": {
-        "name": "Send full job",
-        "description": "Send a complete job object to the POS printer.",
-        "fields": {
-          "printer_name": {
-            "name": "Printer",
-            "description": "Target printer (required when multiple printers are configured)."
-          },
-          "job": {
-            "name": "Job",
-            "description": "Job object matching job.schema.json"
           }
         }
       }

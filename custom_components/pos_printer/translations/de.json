@@ -46,7 +46,7 @@
     "services": {
       "print": {
         "name": "Druckauftrag senden",
-        "description": "Baut und sendet einen Druckauftrag über GUI-Felder oder als vollständiges Auftragsobjekt.",
+        "description": "Baut und sendet einen Druckauftrag vollständig über UI-Felder.",
         "fields": {
           "printer_name": {
             "name": "Drucker",
@@ -155,28 +155,6 @@
           "image_nv_key": {
             "name": "Bild-NV-Key",
             "description": "NV-Bildschlüssel (0–255)."
-          },
-          "message": {
-            "name": "Nachricht",
-            "description": "Optionale rohe Liste von Elementen (erweiterter Modus)."
-          },
-          "job": {
-            "name": "Legacy-Auftrag",
-            "description": "Veraltetes Kompatibilitätsfeld für ein vollständiges Auftragsobjekt."
-          }
-        }
-      },
-      "print_job": {
-        "name": "Vollständigen Auftrag senden",
-        "description": "Sendet ein komplettes Auftragsobjekt an den POS-Drucker.",
-        "fields": {
-          "printer_name": {
-            "name": "Drucker",
-            "description": "Zieldrucker (erforderlich bei mehreren konfigurierten Druckern)."
-          },
-          "job": {
-            "name": "Auftrag",
-            "description": "Auftragsobjekt entsprechend job.schema.json"
           }
         }
       }

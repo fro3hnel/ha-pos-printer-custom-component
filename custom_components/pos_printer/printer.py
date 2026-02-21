@@ -170,42 +170,37 @@ async def setup_print_service(hass: HomeAssistant, config: dict[str, Any]) -> No
 
             job_data: dict[str, Any] | None = None
             message = _coerce_message(call.data.get("message"))
-            priority = call.data.get("priority")
-
-            if message is None and (raw_job := call.data.get("job")) is not None:
+            if (raw_job := call.data.get("job")) is not None:
                 parsed_job = _parse_json_if_needed(raw_job, "job")
                 if not isinstance(parsed_job, dict):
                     raise HomeAssistantError("Field 'job' must be an object.")
                 job_data = dict(parsed_job)
+
+            if message is None and job_data is not None:
                 message = _coerce_message(job_data.get("message"))
-                if priority is None:
-                    priority = job_data.get("priority")
 
             if message is None:
                 message = _build_message_from_gui_fields(call.data)
                 if not message:
                     raise HomeAssistantError(
                         "No message elements provided. "
-                        "Use 'message' or fill at least one of "
+                        "Fill at least one of "
                         "'text_content', 'barcode_content', or 'image_content'."
                     )
 
-            job_id = (
+            payload: dict[str, Any] = dict(job_data or {})
+            payload["job_id"] = (
                 call.data.get("job_id")
-                or (job_data.get("job_id") if job_data else None)
+                or payload.get("job_id")
                 or uuid.uuid4().hex
             )
-
-            payload: dict[str, Any] = {
-                "job_id": job_id,
-                "priority": 5 if priority is None else priority,
-                "message": message,
-            }
+            payload["priority"] = call.data.get("priority", payload.get("priority", 5))
+            payload["message"] = message
 
             for field in ("paper_width", "feed_after", "expires", "timestamp"):
                 value = call.data.get(field)
-                if value is None and job_data:
-                    value = job_data.get(field)
+                if value is None:
+                    value = payload.get(field)
                 if value is not None:
                     payload[field] = _coerce_datetime(value)
 
@@ -216,29 +211,9 @@ async def setup_print_service(hass: HomeAssistant, config: dict[str, Any]) -> No
                 qos=1,
             )
 
-        async def handle_print_job(call: ServiceCall) -> None:
-            """Send full job object via MQTT to the selected printer."""
-            target = _resolve_target_printer(call, printers)
-            publish_topic: str = printers[target]["print_topic"]
-
-            raw_job = _parse_json_if_needed(call.data.get("job", {}), "job")
-            if not isinstance(raw_job, dict):
-                raise HomeAssistantError("Field 'job' must be an object.")
-
-            job = dict(raw_job)
-            job.setdefault("job_id", call.data.get("job_id") or uuid.uuid4().hex)
-            if (timestamp := job.get("timestamp")) is not None:
-                job["timestamp"] = _coerce_datetime(timestamp)
-
-            await mqtt.async_publish(
-                hass,
-                topic=publish_topic,
-                payload=json.dumps(job),
-                qos=1,
-            )
-
+        if hass.services.has_service(DOMAIN, "print_job"):
+            hass.services.async_remove(DOMAIN, "print_job")
         hass.services.async_register(DOMAIN, "print", handle_print)
-        hass.services.async_register(DOMAIN, "print_job", handle_print_job)
         data["service_registered"] = True
 
     @callback
@@ -303,6 +278,8 @@ async def unload_print_service(hass: HomeAssistant, config: dict[str, Any]) -> N
             unsub_log()
 
     if not printers:
-        hass.services.async_remove(DOMAIN, "print")
-        hass.services.async_remove(DOMAIN, "print_job")
+        if hass.services.has_service(DOMAIN, "print"):
+            hass.services.async_remove(DOMAIN, "print")
+        if hass.services.has_service(DOMAIN, "print_job"):
+            hass.services.async_remove(DOMAIN, "print_job")
         hass.data.pop(DOMAIN, None)

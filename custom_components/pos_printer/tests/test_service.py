@@ -42,6 +42,9 @@ class FakeServices:
     def async_register(self, domain, service, func) -> None:
         self._services[(domain, service)] = func
 
+    def has_service(self, domain, service) -> bool:
+        return (domain, service) in self._services
+
     def async_remove(self, domain, service) -> None:
         self.removed.append((domain, service))
         self._services.pop((domain, service), None)
@@ -214,24 +217,28 @@ async def test_print_service_requires_message_content():
 
 
 @pytest.mark.asyncio
-async def test_print_job_service_publishes(mqtt_publish_mock):
-    """Test sending a full job dictionary via print_job."""
+async def test_print_service_publishes_full_job_object(mqtt_publish_mock):
+    """Test sending a full job dictionary via print."""
     hass = FakeHass()
     await setup_print_service(hass, {"printer_name": "printer"})
 
     job = {
         "priority": 4,
+        "timestamp": "2026-02-19T12:00:00+00:00",
+        "paper_width": 53,
         "message": [{"type": "text", "content": "Hi"}],
     }
     await hass.services.async_call(
         DOMAIN,
-        "print_job",
+        "print",
         {"job": job},
         blocking=True,
     )
 
     payload = json.loads(mqtt_publish_mock[-1]["payload"])
     assert payload["priority"] == 4
+    assert payload["timestamp"] == "2026-02-19T12:00:00+00:00"
+    assert payload["paper_width"] == 53
     assert payload["message"][0]["content"] == "Hi"
 
 
@@ -365,8 +372,6 @@ async def test_unload_print_service_removes_services_when_last_printer_removed()
 
     await unload_print_service(hass, {"printer_name": "one"})
     assert (DOMAIN, "print") in hass.services._services
-    assert (DOMAIN, "print_job") in hass.services._services
 
     await unload_print_service(hass, {"printer_name": "two"})
     assert (DOMAIN, "print") not in hass.services._services
-    assert (DOMAIN, "print_job") not in hass.services._services
