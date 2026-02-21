@@ -1,4 +1,3 @@
-
 {
   "pos_printer": {
     "title": "POS-Printer Bridge",
@@ -47,8 +46,12 @@
     "services": {
       "print": {
         "name": "Druckauftrag senden",
-        "description": "Baut und sendet einen Druckauftrag über GUI-Felder an den POS-Drucker.",
+        "description": "Baut und sendet einen Druckauftrag über GUI-Felder oder als vollständiges Auftragsobjekt.",
         "fields": {
+          "printer_name": {
+            "name": "Drucker",
+            "description": "Zieldrucker (erforderlich bei mehreren konfigurierten Druckern)."
+          },
           "job_id": {
             "name": "Auftrags-ID",
             "description": "Eindeutige Kennung des Druckauftrags."
@@ -165,8 +168,12 @@
       },
       "print_job": {
         "name": "Vollständigen Auftrag senden",
-        "description": "Sendet ein komplettes Auftragsobjekt über MQTT.",
+        "description": "Sendet ein komplettes Auftragsobjekt an den POS-Drucker.",
         "fields": {
+          "printer_name": {
+            "name": "Drucker",
+            "description": "Zieldrucker (erforderlich bei mehreren konfigurierten Druckern)."
+          },
           "job": {
             "name": "Auftrag",
             "description": "Auftragsobjekt entsprechend job.schema.json"

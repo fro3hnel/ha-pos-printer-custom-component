@@ -30,6 +30,7 @@ DEFAULT_WIDTH=80
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import os
@@ -37,25 +38,29 @@ import queue
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+from ctypes import (
+    CDLL,
+    POINTER,
+    RTLD_GLOBAL,
+    Structure,
+    byref,
+    c_bool,
+    c_char_p,
+    c_int,
+    c_ubyte,
+    c_uint,
+)
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List
 
 import paho.mqtt.client as mqtt
 import redis
-from ctypes import (
-    CDLL, RTLD_GLOBAL, c_bool, c_char_p, c_int, c_uint, c_ubyte,
-    Structure, POINTER, byref
-)
-import base64
-import io
-import os
-import tempfile
-from PIL import Image
-
 from dotenv import load_dotenv
+from PIL import Image
 
 try:
     import psutil  # type: ignore
@@ -301,13 +306,13 @@ class BixolonPrinter:
 
     def _print_barcode(self, spec: dict[str, any]) -> None:
         """
-        spec keys:
-          - barcode_type: str  (z.B. 'ean13')
+        Specification keys:
+          - barcode_type: str (e.g., 'ean13')
           - content: str
-          - mode: int (für QR/2D barcodes)
+          - mode: int (for QR/2D barcodes)
           - height: int
           - width: int
-          - eccLevel: int oder single-char str
+          - eccLevel: int or single-character str
           - alignment: 'left'|'center'|'right'
           - textPosition: int
           - attribute: int

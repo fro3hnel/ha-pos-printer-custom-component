@@ -1,54 +1,65 @@
-"""Tests for print service of POS-Printer Bridge."""
+"""Tests for print services of POS-Printer Bridge."""
+
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pos_printer.const import DOMAIN
-from custom_components.pos_printer.printer import setup_print_service
+from custom_components.pos_printer.printer import setup_print_service, unload_print_service
 
 
 class FakeBus:
     """Minimal event bus for tests."""
 
-    def __init__(self):
-        self._listeners = {}
-        self.events = []
+    def __init__(self) -> None:
+        self._listeners: dict[str, list] = {}
+        self.events: list[tuple[str, dict | None]] = []
 
     def async_listen(self, event, callback):
         self._listeners.setdefault(event, []).append(callback)
 
-        def _unsub():
+        def _unsub() -> None:
             self._listeners[event].remove(callback)
 
         return _unsub
 
-    def async_fire(self, event, data):
+    def async_fire(self, event, data=None) -> None:
         self.events.append((event, data))
         for callback in list(self._listeners.get(event, [])):
             callback(SimpleNamespace(data=data))
 
 
+class FakeServices:
+    """Minimal service registry for tests."""
+
+    def __init__(self) -> None:
+        self._services = {}
+        self.removed: list[tuple[str, str]] = []
+
+    def async_register(self, domain, service, func) -> None:
+        self._services[(domain, service)] = func
+
+    def async_remove(self, domain, service) -> None:
+        self.removed.append((domain, service))
+        self._services.pop((domain, service), None)
+
+    async def async_call(self, domain, service, data, blocking=True):
+        await self._services[(domain, service)](SimpleNamespace(data=data))
+
+
 class FakeHass:
     """Minimal hass object for tests."""
 
-    def __init__(self, with_config_entries=False):
-        self.services = SimpleNamespace(
-            _services={}, async_register=self._register, async_call=self._async_call
-        )
+    def __init__(self) -> None:
+        self.data = {}
+        self.services = FakeServices()
         self.bus = FakeBus()
-        if with_config_entries:
-            self.config_entries = SimpleNamespace()
 
     async def async_block_till_done(self):
         return
-
-    def _register(self, domain, service, func):
-        self.services._services[(domain, service)] = func
-
-    async def _async_call(self, domain, service, data, blocking=True):
-        await self.services._services[(domain, service)](SimpleNamespace(data=data))
 
 
 @pytest.fixture(autouse=True)
@@ -62,11 +73,15 @@ def mqtt_publish_mock(monkeypatch):
     async def fake_wait_for_client(hass):
         return
 
+    async def fake_subscribe(hass, topic, callback):
+        return lambda: None
+
     monkeypatch.setattr("homeassistant.components.mqtt.async_publish", fake_publish)
     monkeypatch.setattr(
         "homeassistant.components.mqtt.async_wait_for_mqtt_client",
         fake_wait_for_client,
     )
+    monkeypatch.setattr("homeassistant.components.mqtt.async_subscribe", fake_subscribe)
     return calls
 
 
@@ -74,14 +89,15 @@ def mqtt_publish_mock(monkeypatch):
 async def test_print_service_publishes(mqtt_publish_mock):
     """Test that the print service publishes the correct MQTT message."""
     hass = FakeHass()
-    config = {"printer_name": "printer"}
-    await setup_print_service(hass, config)
+    await setup_print_service(hass, {"printer_name": "printer"})
+
     await hass.services.async_call(
         DOMAIN,
         "print",
         {"message": [{"type": "text", "content": "Hello"}]},
         blocking=True,
     )
+
     assert mqtt_publish_mock, "mqtt.async_publish was not called"
     call = mqtt_publish_mock[-1]
     assert call["topic"] == "print/pos/printer/job"
@@ -94,8 +110,7 @@ async def test_print_service_publishes(mqtt_publish_mock):
 async def test_print_service_builds_message_from_gui_fields(mqtt_publish_mock):
     """Test building text/barcode/image elements from GUI fields."""
     hass = FakeHass()
-    config = {"printer_name": "printer"}
-    await setup_print_service(hass, config)
+    await setup_print_service(hass, {"printer_name": "printer"})
 
     await hass.services.async_call(
         DOMAIN,
@@ -163,8 +178,7 @@ async def test_print_service_builds_message_from_gui_fields(mqtt_publish_mock):
 async def test_print_service_supports_legacy_job_json(mqtt_publish_mock):
     """Test compatibility with deprecated job JSON passed to print."""
     hass = FakeHass()
-    config = {"printer_name": "printer"}
-    await setup_print_service(hass, config)
+    await setup_print_service(hass, {"printer_name": "printer"})
 
     await hass.services.async_call(
         DOMAIN,
@@ -190,27 +204,21 @@ async def test_print_service_supports_legacy_job_json(mqtt_publish_mock):
 
 
 @pytest.mark.asyncio
-async def test_print_service_requires_message_content(mqtt_publish_mock):
+async def test_print_service_requires_message_content():
     """Test that print service rejects calls without printable content."""
     hass = FakeHass()
-    config = {"printer_name": "printer"}
-    await setup_print_service(hass, config)
+    await setup_print_service(hass, {"printer_name": "printer"})
 
     with pytest.raises(HomeAssistantError, match="No message elements provided"):
-        await hass.services.async_call(
-            DOMAIN,
-            "print",
-            {},
-            blocking=True,
-        )
+        await hass.services.async_call(DOMAIN, "print", {}, blocking=True)
 
 
 @pytest.mark.asyncio
 async def test_print_job_service_publishes(mqtt_publish_mock):
-    """Test sending a full job dictionary."""
+    """Test sending a full job dictionary via print_job."""
     hass = FakeHass()
-    config = {"printer_name": "printer"}
-    await setup_print_service(hass, config)
+    await setup_print_service(hass, {"printer_name": "printer"})
+
     job = {
         "priority": 4,
         "message": [{"type": "text", "content": "Hi"}],
@@ -221,41 +229,57 @@ async def test_print_job_service_publishes(mqtt_publish_mock):
         {"job": job},
         blocking=True,
     )
-    call = mqtt_publish_mock[-1]
-    payload = json.loads(call["payload"])
+
+    payload = json.loads(mqtt_publish_mock[-1]["payload"])
     assert payload["priority"] == 4
     assert payload["message"][0]["content"] == "Hi"
 
 
 @pytest.mark.asyncio
-async def test_print_job_service_accepts_job_json(mqtt_publish_mock):
-    """Test that print_job service accepts JSON string payloads."""
+async def test_multiple_printers_publish_to_correct_topic(mqtt_publish_mock):
+    """Ensure service routes jobs to the selected printer."""
     hass = FakeHass()
-    config = {"printer_name": "printer"}
-    await setup_print_service(hass, config)
+    await setup_print_service(hass, {"printer_name": "one"})
+    await setup_print_service(hass, {"printer_name": "two"})
 
     await hass.services.async_call(
         DOMAIN,
-        "print_job",
-        {"job": json.dumps({"priority": 3, "message": [{"type": "text", "content": "JSON"}]})},
+        "print",
+        {"printer_name": "one", "message": [{"type": "text", "content": "A"}]},
         blocking=True,
     )
+    assert mqtt_publish_mock[-1]["topic"] == "print/pos/one/job"
 
-    payload = json.loads(mqtt_publish_mock[-1]["payload"])
-    assert payload["priority"] == 3
-    assert payload["message"][0]["content"] == "JSON"
+    await hass.services.async_call(
+        DOMAIN,
+        "print",
+        {"printer_name": "two", "message": [{"type": "text", "content": "B"}]},
+        blocking=True,
+    )
+    assert mqtt_publish_mock[-1]["topic"] == "print/pos/two/job"
 
 
 @pytest.mark.asyncio
 async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
     """Test MQTT subscriptions and forwarding status/log payloads to HA events."""
-    hass = FakeHass(with_config_entries=True)
+    hass = FakeHass()
     subscriptions = {}
 
-    async def fake_subscribe(_hass, topic, callback):
+    async def fake_publish(hass, topic, payload, qos):
+        return
+
+    async def fake_wait_for_client(hass):
+        return
+
+    async def fake_subscribe(hass, topic, callback):
         subscriptions[topic] = callback
         return lambda: None
 
+    monkeypatch.setattr("homeassistant.components.mqtt.async_publish", fake_publish)
+    monkeypatch.setattr(
+        "homeassistant.components.mqtt.async_wait_for_mqtt_client",
+        fake_wait_for_client,
+    )
     monkeypatch.setattr("homeassistant.components.mqtt.async_subscribe", fake_subscribe)
 
     await setup_print_service(hass, {"printer_name": "printer"})
@@ -280,7 +304,10 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
         )
     )
 
-    assert (f"{DOMAIN}.status", {"status": "success"}) in hass.bus.events
+    assert (
+        f"{DOMAIN}.status",
+        {"status": "success", "printer_name": "printer"},
+    ) in hass.bus.events
     assert (
         f"{DOMAIN}.bridge_log",
         {
@@ -288,5 +315,58 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
             "logger": "printer_bridge",
             "message": "queued",
             "timestamp": 1700000000,
+            "printer_name": "printer",
         },
     ) in hass.bus.events
+
+
+@pytest.mark.asyncio
+async def test_status_handler_invalid_json_and_errors(monkeypatch, caplog):
+    """Ensure status handler ignores invalid JSON and logs other errors."""
+    hass = FakeHass()
+    callbacks = {}
+
+    async def fake_publish(hass, topic, payload, qos):
+        return
+
+    async def fake_wait_for_client(hass):
+        return
+
+    async def fake_subscribe(hass, topic, callback):
+        callbacks[topic] = callback
+        return lambda: None
+
+    monkeypatch.setattr("homeassistant.components.mqtt.async_publish", fake_publish)
+    monkeypatch.setattr(
+        "homeassistant.components.mqtt.async_wait_for_mqtt_client",
+        fake_wait_for_client,
+    )
+    monkeypatch.setattr("homeassistant.components.mqtt.async_subscribe", fake_subscribe)
+
+    await setup_print_service(hass, {"printer_name": "printer"})
+
+    status_cb = callbacks["print/pos/printer/ack"]
+
+    status_cb(SimpleNamespace(payload="not-json"))
+    assert hass.bus.events == []
+
+    with caplog.at_level(logging.ERROR):
+        status_cb(SimpleNamespace(payload="[]"))
+    assert "Error handling status payload" in caplog.text
+    assert hass.bus.events == []
+
+
+@pytest.mark.asyncio
+async def test_unload_print_service_removes_services_when_last_printer_removed():
+    """Unload should unsubscribe and remove services after last printer unload."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "one"})
+    await setup_print_service(hass, {"printer_name": "two"})
+
+    await unload_print_service(hass, {"printer_name": "one"})
+    assert (DOMAIN, "print") in hass.services._services
+    assert (DOMAIN, "print_job") in hass.services._services
+
+    await unload_print_service(hass, {"printer_name": "two"})
+    assert (DOMAIN, "print") not in hass.services._services
+    assert (DOMAIN, "print_job") not in hass.services._services

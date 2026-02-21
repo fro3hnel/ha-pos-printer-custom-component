@@ -46,43 +46,138 @@
     "services": {
       "print": {
         "name": "Send print job",
-        "description": "Build and send a print job to the POS printer via GUI fields.",
+        "description": "Build and send a print job via GUI fields, or send a full job object.",
         "fields": {
-          "job_id": {"name": "Job ID", "description": "Unique job identifier."},
-          "priority": {"name": "Priority", "description": "Print priority (0-9, 0 = highest)."},
-          "paper_width": {"name": "Paper width", "description": "Paper width in mm."},
-          "feed_after": {"name": "Feed after", "description": "Additional line feeds after printing."},
-          "expires": {"name": "Expires", "description": "Optional expiry in seconds."},
-          "timestamp": {"name": "Timestamp", "description": "Optional ISO-8601 timestamp."},
-          "text_content": {"name": "Text content", "description": "Text element content."},
-          "text_alignment": {"name": "Text alignment", "description": "Text alignment."},
-          "text_bold": {"name": "Text bold", "description": "Enable bold text."},
-          "text_underline": {"name": "Text underline", "description": "Enable underlined text."},
-          "text_italic": {"name": "Text italic", "description": "Enable italic text."},
-          "text_double_height": {"name": "Text double height", "description": "Enable double-height text."},
-          "text_font": {"name": "Text font", "description": "Text font (A/B/C)."},
-          "text_size": {"name": "Text size", "description": "Text size (1-8)."},
-          "barcode_content": {"name": "Barcode content", "description": "Barcode payload."},
-          "barcode_type": {"name": "Barcode type", "description": "Barcode type."},
-          "barcode_height": {"name": "Barcode height", "description": "Barcode height in dots."},
-          "barcode_width": {"name": "Barcode width", "description": "Barcode module width."},
-          "barcode_ecc_level": {"name": "Barcode ECC level", "description": "QR error correction level."},
-          "barcode_mode": {"name": "Barcode mode", "description": "2D barcode mode/model."},
-          "barcode_alignment": {"name": "Barcode alignment", "description": "Barcode alignment."},
-          "barcode_text_position": {"name": "Barcode text position", "description": "Human-readable text position."},
-          "barcode_attribute": {"name": "Barcode attribute", "description": "Additional barcode attributes."},
-          "image_content": {"name": "Image content", "description": "Image payload as Base64 or data URI."},
-          "image_alignment": {"name": "Image alignment", "description": "Image alignment."},
-          "image_nv_key": {"name": "Image NV key", "description": "NV image key (0-255)."},
-          "message": {"name": "Message", "description": "Optional raw list of elements (advanced mode)."},
-          "job": {"name": "Legacy job", "description": "Deprecated compatibility field for full job object."}
+          "printer_name": {
+            "name": "Printer",
+            "description": "Target printer (required when multiple printers are configured)."
+          },
+          "job_id": {
+            "name": "Job ID",
+            "description": "Unique job identifier."
+          },
+          "priority": {
+            "name": "Priority",
+            "description": "Print priority (0-9, 0 = highest)."
+          },
+          "paper_width": {
+            "name": "Paper width",
+            "description": "Paper width in mm."
+          },
+          "feed_after": {
+            "name": "Feed after",
+            "description": "Additional line feeds after printing."
+          },
+          "expires": {
+            "name": "Expires",
+            "description": "Optional expiry in seconds."
+          },
+          "timestamp": {
+            "name": "Timestamp",
+            "description": "Optional ISO-8601 timestamp."
+          },
+          "text_content": {
+            "name": "Text content",
+            "description": "Text element content."
+          },
+          "text_alignment": {
+            "name": "Text alignment",
+            "description": "Text alignment."
+          },
+          "text_bold": {
+            "name": "Text bold",
+            "description": "Enable bold text."
+          },
+          "text_underline": {
+            "name": "Text underline",
+            "description": "Enable underlined text."
+          },
+          "text_italic": {
+            "name": "Text italic",
+            "description": "Enable italic text."
+          },
+          "text_double_height": {
+            "name": "Text double height",
+            "description": "Enable double-height text."
+          },
+          "text_font": {
+            "name": "Text font",
+            "description": "Text font (A/B/C)."
+          },
+          "text_size": {
+            "name": "Text size",
+            "description": "Text size (1-8)."
+          },
+          "barcode_content": {
+            "name": "Barcode content",
+            "description": "Barcode payload."
+          },
+          "barcode_type": {
+            "name": "Barcode type",
+            "description": "Barcode type."
+          },
+          "barcode_height": {
+            "name": "Barcode height",
+            "description": "Barcode height in dots."
+          },
+          "barcode_width": {
+            "name": "Barcode width",
+            "description": "Barcode module width."
+          },
+          "barcode_ecc_level": {
+            "name": "Barcode ECC level",
+            "description": "QR error correction level."
+          },
+          "barcode_mode": {
+            "name": "Barcode mode",
+            "description": "2D barcode mode/model."
+          },
+          "barcode_alignment": {
+            "name": "Barcode alignment",
+            "description": "Barcode alignment."
+          },
+          "barcode_text_position": {
+            "name": "Barcode text position",
+            "description": "Human-readable text position."
+          },
+          "barcode_attribute": {
+            "name": "Barcode attribute",
+            "description": "Additional barcode attributes."
+          },
+          "image_content": {
+            "name": "Image content",
+            "description": "Image payload as Base64 or data URI."
+          },
+          "image_alignment": {
+            "name": "Image alignment",
+            "description": "Image alignment."
+          },
+          "image_nv_key": {
+            "name": "Image NV key",
+            "description": "NV image key (0-255)."
+          },
+          "message": {
+            "name": "Message",
+            "description": "Optional raw list of elements (advanced mode)."
+          },
+          "job": {
+            "name": "Legacy job",
+            "description": "Deprecated compatibility field for full job object."
+          }
         }
       },
       "print_job": {
         "name": "Send full job",
         "description": "Send a complete job object to the POS printer.",
         "fields": {
-          "job": {"name": "Job", "description": "Job object matching job.schema.json"}
+          "printer_name": {
+            "name": "Printer",
+            "description": "Target printer (required when multiple printers are configured)."
+          },
+          "job": {
+            "name": "Job",
+            "description": "Job object matching job.schema.json"
+          }
         }
       }
     }

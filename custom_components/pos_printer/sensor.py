@@ -3,6 +3,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import logging
+from typing import Callable
 
 from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.config_entries import ConfigEntry
@@ -23,6 +24,11 @@ class PosPrinterEntity:
     def __init__(self, printer_name: str, entry_id: str) -> None:
         self._printer_name = printer_name
         self._entry_id = entry_id
+        self._unsub: Callable[[], None] | None = None
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
 
     @property
     def device_info(self):
@@ -75,14 +81,14 @@ class LastJobStatusSensor(PosPrinterEntity, SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         # Listen to our custom status events
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         status = event.data.get("status")
         if status is not None:
             self._state = status
@@ -108,14 +114,14 @@ class LastJobIdSensor(PosPrinterEntity, SensorEntity):
         return self._state
 
     async def async_added_to_hass(self) -> None:
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         job_id = event.data.get("job_id")
         if job_id is not None:
             self._state = job_id
@@ -146,14 +152,14 @@ class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
         return datetime.fromtimestamp(self._timestamp, tz=timezone.utc)
 
     async def async_added_to_hass(self) -> None:
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         ts = event.data.get("timestamp")
         if isinstance(ts, (int, float)):
             self._timestamp = ts
@@ -173,21 +179,19 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
         super().__init__(printer_name, entry_id)
         self._attr_name = f"{printer_name} Job Error"
         self._attr_unique_id = f"{entry_id}_job_error"
-        self._attr_is_on = False  # <-- wichtig für HA Core
+        self._attr_is_on = False  # required by Home Assistant core
 
     async def async_added_to_hass(self) -> None:
-        # Listener speichern zum späteren Abmelden
+        # Store listener for later unsubscribe
         self._unsub = self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, "_unsub"):
-            self._unsub()
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         status = event.data.get("status")
         is_error = status == "error"
-        # Nur Notification erzeugen, wenn Status jetzt auf Error wechselt
+        # Only create a notification when the status changes to error
         if is_error and not self._attr_is_on:
             self.hass.async_create_task(
                 self.hass.services.async_call(
@@ -275,14 +279,14 @@ class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
         return self._count
 
     async def async_added_to_hass(self) -> None:
-        self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if hasattr(self, '_unsub'):
-            self._unsub()
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
+        if event.data.get("printer_name") != self._printer_name:
+            return
         if event.data.get("status") == "success":
             self._count += 1
             if self.hass and self.entity_id:

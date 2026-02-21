@@ -1,7 +1,12 @@
 print:
   name: "Print POS Job"
-  description: "Build and send a print job via GUI fields (text, barcode, image) with automatic job_id generation."
+  description: "Build and send a print job via GUI fields (text, barcode, image) or send a full job object."
   fields:
+    printer_name:
+      description: "Name of the target printer (required when multiple printers are configured)"
+      example: "kitchen_printer"
+      selector:
+        text:
     job_id:
       description: "Optional job identifier"
       example: "abc123"
@@ -215,7 +220,11 @@ print:
       description: "Optional raw list of message elements (advanced compatibility mode)"
       example: |
         - type: text
-          content: "Hello, World!"
+          content: "Scan this code"
+          alignment: center
+        - type: barcode
+          content: "012345678905"
+          barcode_type: ean13
           alignment: center
       advanced: true
       selector:
@@ -230,6 +239,11 @@ print_job:
   name: "Send Full POS Job"
   description: "Send a full job object as defined in job.schema.json."
   fields:
+    printer_name:
+      description: "Name of the target printer (required when multiple printers are configured)"
+      example: "kitchen_printer"
+      selector:
+        text:
     job:
       description: "Full job object (advanced mode)"
       example: |

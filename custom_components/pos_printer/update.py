@@ -63,7 +63,9 @@ class BridgeUpdateEntity(PosPrinterEntity, UpdateEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register event listener for heartbeat messages."""
-        self._unsub = self.hass.bus.async_listen(f"{DOMAIN}.status", self._handle_event)
+        self._unsub = self.hass.bus.async_listen(
+            f"{DOMAIN}.status", self._handle_event
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up listener on removal."""
@@ -74,6 +76,8 @@ class BridgeUpdateEntity(PosPrinterEntity, UpdateEntity):
     @callback
     def _handle_event(self, event: Event) -> None:
         """Handle status or heartbeat events to extract version."""
+        if event.data.get("printer_name") != self._printer_name:
+            return
         heartbeat: dict[str, Any] | None = event.data.get("heartbeat")
         version = (
             heartbeat.get("version")

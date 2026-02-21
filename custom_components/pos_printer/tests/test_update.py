@@ -1,25 +1,33 @@
+"""Tests for update entities of POS-Printer Bridge."""
+
 import json
-import pytest
 from types import SimpleNamespace
 
-from custom_components.pos_printer.update import BridgeUpdateEntity
+import pytest
+
 from custom_components.pos_printer.const import DOMAIN
+from custom_components.pos_printer.update import BridgeUpdateEntity
 
 
 class FakeBus:
-    def __init__(self):
+    def __init__(self) -> None:
         self._cbs = []
 
     def async_listen(self, _event, cb):
         self._cbs.append(cb)
 
-    def async_fire(self, _event, data):
+        def _remove() -> None:
+            self._cbs.remove(cb)
+
+        return _remove
+
+    def async_fire(self, _event, data) -> None:
         for cb in list(self._cbs):
             cb(SimpleNamespace(data=data))
 
 
 class FakeHass:
-    def __init__(self):
+    def __init__(self) -> None:
         self.bus = FakeBus()
 
     async def async_block_till_done(self):
@@ -46,7 +54,12 @@ async def test_update_entity_installs_exact_version(mqtt_publish_mock):
     entity.hass = hass
     await entity.async_added_to_hass()
 
-    heartbeat = {"heartbeat": {"version": "0.0.9"}}
+    # Event from different printer should be ignored.
+    hass.bus.async_fire(
+        f"{DOMAIN}.status", {"printer_name": "other", "heartbeat": {"version": "0.0.8"}}
+    )
+
+    heartbeat = {"printer_name": "printer", "heartbeat": {"version": "0.0.9"}}
     hass.bus.async_fire(f"{DOMAIN}.status", heartbeat)
     await hass.async_block_till_done()
     assert entity.installed_version == "0.0.9"
@@ -67,7 +80,7 @@ async def test_update_entity_installs_requested_version(mqtt_publish_mock):
     entity.hass = hass
     await entity.async_added_to_hass()
 
-    hass.bus.async_fire(f"{DOMAIN}.status", {"version": "0.1.0"})
+    hass.bus.async_fire(f"{DOMAIN}.status", {"printer_name": "printer", "version": "0.1.0"})
     await hass.async_block_till_done()
     assert entity.installed_version == "0.1.0"
 
@@ -77,3 +90,23 @@ async def test_update_entity_installs_requested_version(mqtt_publish_mock):
     assert call["topic"] == "print/pos/printer/update"
     payload = json.loads(call["payload"])
     assert payload["version"] == "0.2.0"
+
+
+@pytest.mark.asyncio
+async def test_update_entity_removes_listener():
+    """Update entity should detach bus listener when removed."""
+    hass = FakeHass()
+    entity = BridgeUpdateEntity("printer", "entry")
+    entity.hass = hass
+
+    await entity.async_added_to_hass()
+    assert hass.bus._cbs, "Listener was not registered"
+
+    await entity.async_will_remove_from_hass()
+    assert not hass.bus._cbs, "Listener was not removed"
+
+    hass.bus.async_fire(
+        f"{DOMAIN}.status", {"printer_name": "printer", "heartbeat": {"version": "1"}}
+    )
+    await hass.async_block_till_done()
+    assert entity.installed_version is None
