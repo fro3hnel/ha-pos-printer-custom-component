@@ -36,10 +36,10 @@ def async_validate_printer_name_issue(
     """Create or clear a repair issue for legacy invalid printer names."""
     issue_id = _invalid_printer_issue_id(entry.entry_id)
     if is_valid_printer_name(printer_name):
-        ir.delete_issue(hass, DOMAIN, issue_id)
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
         return
 
-    ir.create_issue(
+    ir.async_create_issue(
         hass,
         DOMAIN,
         issue_id,
@@ -63,21 +63,21 @@ def async_validate_bridge_version_issue(
 
     issue_id = _outdated_bridge_issue_id(entry_id)
     if not bridge_version:
-        ir.delete_issue(hass, DOMAIN, issue_id)
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
         return
 
     try:
         current_version = Version(bridge_version)
         minimum_version = Version(VERSION)
     except InvalidVersion:
-        ir.delete_issue(hass, DOMAIN, issue_id)
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
         return
 
     if current_version >= minimum_version:
-        ir.delete_issue(hass, DOMAIN, issue_id)
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
         return
 
-    ir.create_issue(
+    ir.async_create_issue(
         hass,
         DOMAIN,
         issue_id,
@@ -101,5 +101,5 @@ def async_validate_entry_issues(hass: HomeAssistant, entry: ConfigEntry) -> None
 
 def async_clear_entry_issues(hass: HomeAssistant, entry_id: str) -> None:
     """Clear all repair issues for a config entry."""
-    ir.delete_issue(hass, DOMAIN, _invalid_printer_issue_id(entry_id))
-    ir.delete_issue(hass, DOMAIN, _outdated_bridge_issue_id(entry_id))
+    ir.async_delete_issue(hass, DOMAIN, _invalid_printer_issue_id(entry_id))
+    ir.async_delete_issue(hass, DOMAIN, _outdated_bridge_issue_id(entry_id))

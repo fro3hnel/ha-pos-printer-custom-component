@@ -108,11 +108,11 @@ def test_repairs_helpers_create_and_clear_issues(monkeypatch):
     hass = SimpleNamespace()
 
     monkeypatch.setattr(
-        "homeassistant.helpers.issue_registry.create_issue",
+        "homeassistant.helpers.issue_registry.async_create_issue",
         lambda hass, domain, issue_id, **kwargs: calls["create"].append((issue_id, kwargs["translation_key"])),
     )
     monkeypatch.setattr(
-        "homeassistant.helpers.issue_registry.delete_issue",
+        "homeassistant.helpers.issue_registry.async_delete_issue",
         lambda hass, domain, issue_id: calls["delete"].append(issue_id),
     )
 
