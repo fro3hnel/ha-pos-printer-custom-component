@@ -2,9 +2,23 @@
   "pos_printer": {
     "title": "POS-Printer Bridge",
     "config": {
+      "abort": {
+        "invalid_discovery": "Die MQTT-Discovery-Nachricht ist ungültig.",
+        "already_configured": "Dieser Drucker ist bereits eingerichtet."
+      },
+      "error": {
+        "invalid_printer_name": "Druckernamen dürfen nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten."
+      },
       "step": {
         "user": {
           "title": "POS-Printer Bridge einrichten",
+          "data": {
+            "printer_name": "Druckername"
+          }
+        },
+        "reconfigure": {
+          "title": "POS-Printer Bridge neu konfigurieren",
+          "description": "Aktualisiert den Druckernamen für die MQTT-Themen.",
           "data": {
             "printer_name": "Druckername"
           }
@@ -14,9 +28,12 @@
     "sensor": {
       "last_job_status": "Status des letzten Druckauftrags",
       "last_job_id": "ID des letzten Druckauftrags",
+      "last_job_detail": "Detail des letzten Druckauftrags",
       "last_status_update": "Zeitpunkt der letzten Statusmeldung",
+      "queue_length": "Warteschlangenlänge",
+      "bridge_version": "Bridge-Version",
       "last_bridge_log": "Letzte Bridge-Logmeldung",
-      "successful_jobs": "Anzahl erfolgreicher Druckaufträge"
+      "successful_jobs": "Erfolgreiche Druckaufträge"
     },
     "binary_sensor": {
       "job_error": "Druckauftrag-Fehler"
@@ -34,8 +51,11 @@
       "error": "Fehler"
     },
     "options": {
+      "error": {
+        "invalid_printer_name": "Druckernamen dürfen nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten."
+      },
       "step": {
-        "user": {
+        "init": {
           "title": "POS-Printer Bridge Optionen",
           "data": {
             "printer_name": "Druckername"
@@ -43,14 +63,32 @@
         }
       }
     },
+    "issues": {
+      "invalid_printer_name": {
+        "title": "Druckername sollte neu konfiguriert werden",
+        "description": "Der konfigurierte Druckername `{printer_name}` ist für MQTT-Themen ungeeignet. Konfiguriere die Integration neu und verwende nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche."
+      },
+      "outdated_bridge_version": {
+        "title": "Bridge-Software ist veraltet",
+        "description": "Die Bridge für `{printer_name}` meldet Version `{bridge_version}`. Aktualisiere die Raspberry-Pi-Bridge auf mindestens `{minimum_version}`, damit sie zur installierten Home-Assistant-Integration passt."
+      }
+    },
     "services": {
       "print": {
         "name": "Druckauftrag senden",
-        "description": "Baut und sendet einen Druckauftrag vollständig über UI-Felder.",
+        "description": "Erweiterter Druckservice für frei definierte POS-Druckjobs mit optionaler Bildverarbeitung auf dem Home-Assistant-Host.",
         "fields": {
           "printer_name": {
             "name": "Drucker",
-            "description": "Zieldrucker (erforderlich bei mehreren konfigurierten Druckern)."
+            "description": "Zieldrucker."
+          },
+          "job": {
+            "name": "Vollständiges Job-Objekt",
+            "description": "Optionales komplettes Job-Objekt oder JSON-String."
+          },
+          "message": {
+            "name": "Nachrichtenelemente",
+            "description": "Optionale Liste von Druckelementen oder JSON-String."
           },
           "job_id": {
             "name": "Auftrags-ID",
@@ -58,7 +96,7 @@
           },
           "priority": {
             "name": "Priorität",
-            "description": "Druck-Priorität (0–9, 0 = höchste)."
+            "description": "Druck-Priorität (0-9, 0 = höchste)."
           },
           "paper_width": {
             "name": "Papierbreite",
@@ -78,7 +116,7 @@
           },
           "text_content": {
             "name": "Textinhalt",
-            "description": "Inhalt des Textelements."
+            "description": "Einzelner Textblock."
           },
           "text_lines": {
             "name": "Textzeilen",
@@ -110,7 +148,7 @@
           },
           "text_size": {
             "name": "Textgröße",
-            "description": "Textgröße (1–8)."
+            "description": "Textgröße (1-8)."
           },
           "barcode_content": {
             "name": "Barcode-Inhalt",
@@ -134,7 +172,7 @@
           },
           "barcode_mode": {
             "name": "Barcode-Modus",
-            "description": "2D-Barcode-Modus/Modell."
+            "description": "2D-Barcode-Modus oder Modell."
           },
           "barcode_alignment": {
             "name": "Barcode-Ausrichtung",
@@ -148,9 +186,25 @@
             "name": "Barcode-Attribut",
             "description": "Zusätzliche Barcode-Attribute."
           },
+          "camera_entity_id": {
+            "name": "Kamera",
+            "description": "Eine Home-Assistant-Kamera als Bildquelle verwenden."
+          },
+          "image_media_source": {
+            "name": "Medienbrowser-Bild",
+            "description": "Bild aus dem lokalen Home-Assistant-Medienbrowser."
+          },
+          "image_path": {
+            "name": "Lokaler Bildpfad",
+            "description": "Pfad innerhalb des Config-, Media- oder www-Verzeichnisses."
+          },
+          "image_url": {
+            "name": "Bild-URL",
+            "description": "HTTP(S)- oder file://-URL, die auf dem Home-Assistant-Host aufgelöst wird."
+          },
           "image_content": {
             "name": "Bildinhalt",
-            "description": "Bilddaten als Base64, Data-URI oder URI."
+            "description": "Rohe Bilddaten als Base64 oder Data-URI."
           },
           "image_alignment": {
             "name": "Bildausrichtung",
@@ -158,7 +212,191 @@
           },
           "image_nv_key": {
             "name": "Bild-NV-Key",
-            "description": "NV-Bildschlüssel (0–255)."
+            "description": "NV-Bildschlüssel (0-255)."
+          },
+          "image_process_on_host": {
+            "name": "Bild auf Home Assistant verarbeiten",
+            "description": "Bild auf dem Home-Assistant-Host skalieren und dithern, bevor es an den Pi gesendet wird."
+          },
+          "image_max_width": {
+            "name": "Maximale Bildbreite",
+            "description": "Optionale maximale Bildbreite in Pixeln."
+          },
+          "image_threshold": {
+            "name": "Bild-Schwellenwert",
+            "description": "Schwarz-Weiß-Schwellenwert, wenn Dithering deaktiviert ist."
+          },
+          "image_dither": {
+            "name": "Bild-Dithering",
+            "description": "Floyd-Steinberg-Dithering verwenden."
+          },
+          "image_invert": {
+            "name": "Bild invertieren",
+            "description": "Schwarz und Weiß vor dem Druck invertieren."
+          },
+          "image_rotation": {
+            "name": "Bildrotation",
+            "description": "Bild auf dem Home-Assistant-Host drehen."
+          },
+          "image_fetch_timeout": {
+            "name": "Bild-Timeout",
+            "description": "Zeitlimit für Kamera- und URL-Bildquellen."
+          }
+        }
+      },
+      "print_text": {
+        "name": "Textnachricht drucken",
+        "description": "Dashboard-freundlicher Textdruck für Notizen, Helper-Texte und Automationsmeldungen.",
+        "fields": {
+          "printer_name": {
+            "name": "Drucker",
+            "description": "Zieldrucker."
+          },
+          "title": {
+            "name": "Titel",
+            "description": "Optionaler Titel vor dem Haupttext."
+          },
+          "text": {
+            "name": "Text",
+            "description": "Haupttext für den Druck."
+          },
+          "footer": {
+            "name": "Fußzeile",
+            "description": "Optionale Fußzeile nach dem Haupttext."
+          },
+          "alignment": {
+            "name": "Textausrichtung",
+            "description": "Ausrichtung des Haupttextes."
+          },
+          "title_alignment": {
+            "name": "Titelausrichtung",
+            "description": "Ausrichtung des Titels."
+          },
+          "footer_alignment": {
+            "name": "Fußzeilen-Ausrichtung",
+            "description": "Ausrichtung der Fußzeile."
+          },
+          "title_bold": {
+            "name": "Titel fett",
+            "description": "Titel fett drucken."
+          },
+          "title_double_height": {
+            "name": "Großer Titel",
+            "description": "Titel in doppelter Höhe drucken."
+          },
+          "body_bold": {
+            "name": "Text fett",
+            "description": "Haupttext fett drucken."
+          },
+          "footer_bold": {
+            "name": "Fußzeile fett",
+            "description": "Fußzeile fett drucken."
+          },
+          "priority": {
+            "name": "Priorität",
+            "description": "Druck-Priorität (0-9, 0 = höchste)."
+          },
+          "paper_width": {
+            "name": "Papierbreite",
+            "description": "Papierbreite in mm."
+          },
+          "feed_after": {
+            "name": "Nachschub",
+            "description": "Zusätzliche Zeilenvorschübe nach dem Druck."
+          }
+        }
+      },
+      "print_image": {
+        "name": "Bild drucken",
+        "description": "Bildorientierter Druck mit Vorverarbeitung auf dem Home-Assistant-Host.",
+        "fields": {
+          "printer_name": {
+            "name": "Drucker",
+            "description": "Zieldrucker."
+          },
+          "title": {
+            "name": "Titel",
+            "description": "Optionaler Titel vor dem Bild."
+          },
+          "caption": {
+            "name": "Bildunterschrift",
+            "description": "Optionale Bildunterschrift nach dem Bild."
+          },
+          "camera_entity_id": {
+            "name": "Kamera",
+            "description": "Eine Home-Assistant-Kamera als Bildquelle verwenden."
+          },
+          "image_media_source": {
+            "name": "Medienbrowser-Bild",
+            "description": "Bild aus dem lokalen Home-Assistant-Medienbrowser."
+          },
+          "image_path": {
+            "name": "Lokaler Bildpfad",
+            "description": "Pfad innerhalb des Config-, Media- oder www-Verzeichnisses."
+          },
+          "image_url": {
+            "name": "Bild-URL",
+            "description": "HTTP(S)- oder file://-URL, die auf dem Home-Assistant-Host aufgelöst wird."
+          },
+          "image_content": {
+            "name": "Bildinhalt",
+            "description": "Rohe Bilddaten als Base64 oder Data-URI."
+          },
+          "image_alignment": {
+            "name": "Bildausrichtung",
+            "description": "Ausrichtung des Bildes."
+          },
+          "title_alignment": {
+            "name": "Titelausrichtung",
+            "description": "Ausrichtung des Titels."
+          },
+          "caption_alignment": {
+            "name": "Ausrichtung der Bildunterschrift",
+            "description": "Ausrichtung der Bildunterschrift."
+          },
+          "caption_bold": {
+            "name": "Bildunterschrift fett",
+            "description": "Bildunterschrift fett drucken."
+          },
+          "image_process_on_host": {
+            "name": "Bild auf Home Assistant verarbeiten",
+            "description": "Bild auf dem Home-Assistant-Host skalieren und dithern, bevor es an den Pi gesendet wird."
+          },
+          "image_max_width": {
+            "name": "Maximale Bildbreite",
+            "description": "Optionale maximale Bildbreite in Pixeln."
+          },
+          "image_threshold": {
+            "name": "Bild-Schwellenwert",
+            "description": "Schwarz-Weiß-Schwellenwert, wenn Dithering deaktiviert ist."
+          },
+          "image_dither": {
+            "name": "Bild-Dithering",
+            "description": "Floyd-Steinberg-Dithering verwenden."
+          },
+          "image_invert": {
+            "name": "Bild invertieren",
+            "description": "Schwarz und Weiß vor dem Druck invertieren."
+          },
+          "image_rotation": {
+            "name": "Bildrotation",
+            "description": "Bild auf dem Home-Assistant-Host drehen."
+          },
+          "image_fetch_timeout": {
+            "name": "Bild-Timeout",
+            "description": "Zeitlimit für Kamera- und URL-Bildquellen."
+          },
+          "priority": {
+            "name": "Priorität",
+            "description": "Druck-Priorität (0-9, 0 = höchste)."
+          },
+          "paper_width": {
+            "name": "Papierbreite",
+            "description": "Papierbreite in mm."
+          },
+          "feed_after": {
+            "name": "Nachschub",
+            "description": "Zusätzliche Zeilenvorschübe nach dem Druck."
           }
         }
       }

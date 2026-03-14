@@ -1,105 +1,228 @@
 # POS-Printer Bridge
 
-## Overview
-The POS-Printer Bridge integration allows Home Assistant to send print jobs over MQTT to a Raspberry Pi Zero W service, which handles printing on Bixolon POS printers.
+Home Assistant custom integration plus Raspberry Pi bridge service for Bixolon POS printers. Jobs are sent from Home Assistant via MQTT, queued on the Pi, and printed on the POS printer.
+
+## What Is New In This Revision
+
+- Image preprocessing can now happen on the Home Assistant host instead of the Raspberry Pi.
+- Two dashboard-friendly services were added: `pos_printer.print_text` and `pos_printer.print_image`.
+- Camera entities, local media browser images, local files, URLs, Base64, and data URIs are supported as image sources.
+- New sensors expose queue length, bridge version, and last job detail.
+- Diagnostics support was added for easier troubleshooting.
+- The bridge now respects `feed_after` from the job payload.
+- Example blueprints were added for dashboard text printing and camera snapshot printing.
 
 ## Installation
 
+### Prerequisites
+- Home Assistant with the MQTT integration configured and connected to your broker.
+- A Raspberry Pi running the `bridge/` service from this repository.
+- A Bixolon or ESC/POS-compatible printer that works with the bridge host.
+
 ### HACS
-1. Add this repository to HACS under "Integrations".
-2. Install the **POS Printer Bridge** integration.
+1. Add this repository to HACS under `Integrations`.
+2. Install `POS-Printer Bridge`.
 3. Restart Home Assistant.
 
 ### Manual
-1. Clone this repository into `<config>/custom_components/pos_printer`.
+1. Copy this repository into `<config>/custom_components/pos_printer`.
 2. Restart Home Assistant.
 
 ## Configuration
 
-1. Go to **Settings -> Devices & Services -> Integrations**.
-2. Click **Add Integration** and search for **POS-Printer Bridge**.
-3. Enter a printer name. Repeat setup to add multiple printers; each printer uses its own MQTT topics.
+1. Go to `Settings -> Devices & Services -> Integrations`.
+2. Click `Add Integration` and search for `POS-Printer Bridge`.
+3. Enter a printer name using only lowercase letters, numbers, underscores, and hyphens.
+4. Repeat setup for each printer. Each printer uses its own MQTT topics.
 
-### Options
-After setup, you can adjust the printer name via **Configure** on the integration entry.
+You can rename a printer later via `Configure` on the integration entry.
+
+### Configuration Parameters
+- `printer_name`: Logical printer identifier and MQTT topic suffix. It must be unique per config entry and safe for MQTT topic usage.
+
+## Removal
+
+1. Remove the config entry in `Settings -> Devices & Services`.
+2. Stop or uninstall the Raspberry Pi bridge if the printer should no longer publish discovery or status messages.
+3. Delete any dashboard helpers or automations that referenced the removed printer.
 
 ## Services
 
-| Service | Description |
-|---|---|
-| `pos_printer.print` | Build and send a print job fully via UI fields. |
+### `pos_printer.print`
+Advanced low-level service for full custom job payloads. It still supports the original JSON-based workflow, but now also supports host-side image processing.
 
-### Service Fields for `print`
-- `printer_name`: Target printer (required if more than one printer is configured).
-- Job fields: `job_id`, `priority`, `paper_width`, `feed_after`, `expires`, `timestamp`.
-- Text element fields: `text_content`, `text_lines`, `text_alignment`, `text_bold`, `text_underline`, `text_italic`, `text_double_height`, `text_font`, `text_size`.
-- Barcode element fields: `barcode_content`, `barcode_type`, `barcode_height`, `barcode_width`, `barcode_ecc_level`, `barcode_mode`, `barcode_alignment`, `barcode_text_position`, `barcode_attribute`.
-- Image element fields: `image_content` (Base64/Data-URI/URI), `image_alignment`, `image_nv_key`.
+### `pos_printer.print_text`
+Simple text printing for dashboard helpers, buttons, and automations.
 
-### Example Service Call (`print`)
+Example:
+
 ```yaml
-service: pos_printer.print
+service: pos_printer.print_text
 data:
   printer_name: kitchen_printer
-  priority: 4
-  text_lines: |
+  title: "Kitchen"
+  text: |
     Table 7
     2x Burger
     Total: 19.90 EUR
-  text_alignment: center
-  barcode_content: "012345678905"
-  barcode_type: ean13
-  barcode_alignment: center
+  alignment: center
 ```
 
-## Sensors
+### `pos_printer.print_image`
+Simple image printing with preprocessing on the Home Assistant host.
 
-- **Last Job Status** (`sensor.<printer_name>_last_job_status`): Status of the last print job.
-- **Last Job ID** (`sensor.<printer_name>_last_job_id`): ID of the last print job.
-- **Last Status Update** (`sensor.<printer_name>_last_status_update`): Timestamp of the last status message.
-- **Successful Jobs** (`sensor.<printer_name>_successful_jobs`): Count of successful print jobs.
-- **Job Error** (`binary_sensor.<printer_name>_job_error`): Indicates if the last job failed; shows a persistent notification on error.
+Example with a camera entity:
 
-## Device Controls and Updates
+```yaml
+service: pos_printer.print_image
+data:
+  printer_name: kitchen_printer
+  title: "Doorbell Snapshot"
+  camera_entity_id: camera.front_door
+  paper_width: 80
+  image_alignment: center
+```
 
-- **Bridge update** (`update.<printer_name>_bridge`): Uses the Home Assistant update mechanism and triggers a bridge software update on the Pi.
-- **Restart bridge** button: Reboots the Raspberry Pi running the bridge service.
-- **Update Pi software** button: Runs `apt-get update/upgrade/autoremove` on the Raspberry Pi via MQTT command.
+Example with a local media file:
 
-## Translations
-This integration includes English (`en.json`) and German (`de.json`) translations.
-Additional languages can be added under `translations/`.
+```yaml
+service: pos_printer.print_image
+data:
+  printer_name: kitchen_printer
+  image_media_source:
+    media_content_id: media-source://media_source/local/receipts/logo.png
+  caption: "Printed from local media"
+```
+
+## Supported Image Sources
+
+The integration can resolve and preprocess these image sources on the Home Assistant host:
+
+- Home Assistant `camera` entities
+- Local media browser images (`media-source://media_source/local/...`)
+- Local files inside `config`, `media`, or `www`
+- `http://`, `https://`, and `file://` URLs
+- Raw Base64 and data URIs
+
+Processing options include:
+
+- automatic paper-width based resizing
+- optional max width override
+- Floyd-Steinberg dithering
+- manual threshold mode
+- inversion
+- rotation
+
+## Dashboard Workflows
+
+### Dashboard text input
+Use the blueprint [print_input_text_message.yaml](./blueprints/automation/pos_printer/print_input_text_message.yaml) with:
+
+- one `input_text` helper
+- one `input_button` helper
+- a simple dashboard card containing both helpers
+
+Pressing the button prints the current helper content.
+
+### Camera snapshot printing
+Use the blueprint [print_camera_snapshot.yaml](./blueprints/automation/pos_printer/print_camera_snapshot.yaml) with:
+
+- one `camera` entity
+- one `input_button` helper
+
+Pressing the button prints the latest snapshot.
+
+## Important Limitation
+
+Opening the native smartphone camera or private device photo library directly from an integration service is controlled by the Home Assistant frontend and mobile app, not by this backend integration. The implemented HA-native alternatives are:
+
+- print from a Home Assistant camera entity
+- print from the Home Assistant media browser
+- print from dashboard text helpers and buttons
+
+## Supported Devices
+
+- Bixolon POS printers attached to the Raspberry Pi bridge.
+- Other ESC/POS-compatible printers may work when the bridge can access them, but they are not the primary tested target.
+
+## Supported Functions
+
+- Text, barcode, and image print jobs
+- Host-side image preprocessing on Home Assistant
+- Dashboard-friendly text and image print services
+- Queue, bridge version, and error diagnostics
+- Bridge restart and bridge software update controls
+
+## Data Updates
+
+The integration is push-based. The Raspberry Pi bridge publishes status and log payloads over MQTT, and Home Assistant updates entities immediately from those events. There is no polling loop in Home Assistant for printer state.
+
+## Use Cases
+
+- Print kitchen or workshop task tickets from dashboards and automations
+- Print doorbell or camera snapshots on receipt paper
+- Print ad-hoc notes, reminders, labels, or QR/barcode slips
+
+## Sensors And Controls
+
+- `sensor.<printer>_last_job_status`
+- `sensor.<printer>_last_job_id`
+- `sensor.<printer>_last_job_detail`
+- `sensor.<printer>_last_status_update`
+- `sensor.<printer>_queue_length`
+- `sensor.<printer>_bridge_version`
+- `sensor.<printer>_last_bridge_log`
+- `sensor.<printer>_successful_jobs`
+- `binary_sensor.<printer>_job_error`
+- `update.<printer>_bridge`
+- bridge restart button
+- Pi software update button
+
+## Diagnostics
+
+The integration now exposes diagnostics via Home Assistant diagnostics downloads. This includes config entry data, MQTT topics, and the latest status/log payloads for the selected printer.
+
+Sensitive values are redacted before export, including printer names, MQTT topics, job IDs, message text, detail strings, and file paths.
+
+## Repairs
+
+Home Assistant repair issues are raised when:
+
+- a legacy config entry still uses an invalid printer name
+- the bridge reports an older version than the installed integration expects
+
+These issue cards link back to configuration or troubleshooting guidance.
+
+## Troubleshooting
+
+- If no printer appears, verify that Home Assistant MQTT is connected and that the bridge publishes discovery to `pos_printer/discovery`.
+- If printing works inconsistently, check the `last_bridge_log`, `queue_length`, and `bridge_version` entities for the affected printer.
+- If Home Assistant shows an outdated bridge repair issue, run the bridge update action or update the Pi manually.
+- If image printing fails, ensure file paths stay inside `config`, `media`, or `www`, or use a local media-source item or camera entity instead.
+- Download diagnostics from the config entry before filing an issue so the latest redacted MQTT status/log payloads are available.
 
 ## Bridge Installation
-A helper script installs the Raspberry Pi service **and** sets up a systemd unit. Run on the Pi:
+
+Run on the Raspberry Pi:
+
 ```bash
 curl -sL https://raw.githubusercontent.com/fro3hnel/ha-pos-printer-custom-component/main/bridge/install.sh | bash
 ```
-The script clones this repository, installs dependencies (including `python3-pil`),
-creates a virtual environment with `--system-site-packages`, adds your user to the
-`plugdev` group for USB printer access and starts `pos-printer.service`.
 
-## Removal
-Delete the integration in Home Assistant and remove the `pos_printer` folder from
-`custom_components` to clean up.
+The script clones the repository, installs dependencies, creates a virtual environment with `--system-site-packages`, adds your user to `plugdev`, and starts the bridge service.
 
-## Development and Testing
-Install dependencies and run tests:
-```bash
-pip install -r bridge/setup.py
-pytest
-```
+## Development And Testing
 
-## Minimal Raspberry Pi Zero W Image Build (pi-gen + Docker)
-A dedicated builder component is available in:
+Install test dependencies and run the test suite from repository root:
 
 ```bash
-./pi-gen-builder
+python3 -m pip install -r requirements_test.txt
+python3 -m pytest
 ```
 
-It builds a minimal Raspberry Pi OS Lite image with the POS printer bridge preinstalled, using `pi-gen` in Docker.
+## Minimal Raspberry Pi Zero W Image Build
 
-Start the build from repository root:
+The repository also contains `pi-gen-builder/` for building a minimal Raspberry Pi OS Lite image with the bridge preinstalled:
 
 ```bash
 ./pi-gen-builder/build.sh

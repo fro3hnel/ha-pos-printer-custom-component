@@ -8,12 +8,15 @@ from homeassistant.components import mqtt
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .sensor import PosPrinterEntity
+from .sensor import PosPrinterEntity, _entry_printer_name
 
 _LOGGER = logging.getLogger(__name__)
+
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -22,7 +25,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up bridge control buttons."""
-    printer_name = entry.data["printer_name"]
+    printer_name = _entry_printer_name(entry)
     entry_id = entry.entry_id
     async_add_entities(
         [
@@ -38,6 +41,8 @@ class RestartButton(PosPrinterEntity, ButtonEntity):
     _attr_translation_key = "bridge_restart"
     _attr_translation_domain = DOMAIN
     _attr_icon = "mdi:restart"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
         super().__init__(printer_name, entry_id)
@@ -57,6 +62,8 @@ class PiSoftwareUpdateButton(PosPrinterEntity, ButtonEntity):
     _attr_translation_key = "pi_software_update"
     _attr_translation_domain = DOMAIN
     _attr_icon = "mdi:package-up"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, printer_name: str, entry_id: str) -> None:
         super().__init__(printer_name, entry_id)

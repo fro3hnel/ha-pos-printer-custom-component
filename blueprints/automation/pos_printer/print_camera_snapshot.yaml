@@ -1,0 +1,75 @@
+blueprint:
+  name: Print camera snapshot to POS printer
+  description: Print a camera snapshot when an input_button helper is pressed.
+  domain: automation
+  input:
+    trigger_button:
+      name: Trigger button
+      selector:
+        entity:
+          filter:
+            - domain: input_button
+    camera_entity:
+      name: Camera
+      selector:
+        entity:
+          filter:
+            - domain: camera
+    printer_name:
+      name: Printer name
+      selector:
+        text:
+    title:
+      name: Optional title
+      default: ""
+      selector:
+        text:
+    caption:
+      name: Optional caption
+      default: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      selector:
+        text:
+    image_alignment:
+      name: Image alignment
+      default: center
+      selector:
+        select:
+          options:
+            - left
+            - center
+            - right
+    paper_width:
+      name: Paper width
+      default: 80
+      selector:
+        select:
+          options:
+            - label: 53 mm
+              value: 53
+            - label: 80 mm
+              value: 80
+    feed_after:
+      name: Feed after
+      default: 4
+      selector:
+        number:
+          min: 0
+          step: 1
+
+mode: queued
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input trigger_button
+
+action:
+  - service: pos_printer.print_image
+    data:
+      printer_name: !input printer_name
+      title: !input title
+      caption: !input caption
+      camera_entity_id: !input camera_entity
+      image_alignment: !input image_alignment
+      paper_width: !input paper_width
+      feed_after: !input feed_after

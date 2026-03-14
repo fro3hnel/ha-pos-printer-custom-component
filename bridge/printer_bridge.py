@@ -73,7 +73,7 @@ except ImportError:
 
 load_dotenv()
 
-BRIDGE_VERSION = "0.1.0"
+BRIDGE_VERSION = "0.2.0"
 REPO_URL = "https://github.com/fro3hnel/ha-pos-printer-custom-component.git"
 
 @dataclass(slots=True)
@@ -113,7 +113,7 @@ def _decode_data_uri(content: str) -> bytes:
 
 def _fetch_image_from_uri(uri: str, timeout: int) -> bytes:
     """Download image bytes from a URI."""
-    request = Request(uri, headers={"User-Agent": "ha-pos-printer-bridge/0.1.0"})
+    request = Request(uri, headers={"User-Agent": f"ha-pos-printer-bridge/{BRIDGE_VERSION}"})
     with urlopen(request, timeout=timeout) as response:  # nosec B310
         return response.read()
 
@@ -347,13 +347,13 @@ class BixolonPrinter:
                         "Element %s (%s) failed: %s", idx, element_desc, exc, exc_info=True
                     )
                     failed.append(f"{idx}:{element_desc}:{exc}")
-            self._feed(4)
+            self._feed(int(job.get("feed_after", 4)))
             self._cut()
         return failed
 
     # ---------------- helpers ----------------
 
-    def _print_barcode(self, spec: dict[str, any]) -> None:
+    def _print_barcode(self, spec: dict[str, Any]) -> None:
         """
         Specification keys:
           - barcode_type: str (e.g., 'ean13')
@@ -465,6 +465,7 @@ class MQTTBridge:
     def stop(self):
         self._stop.set()
         self.client.loop_stop()
+        self.client.disconnect()
         LOGGER.removeHandler(self._log_handler)
         self._log_handler.close()
 
@@ -490,6 +491,10 @@ class MQTTBridge:
     def _on_message(self, _cli, _userdata, msg):  # noqa: D401
         try:
             payload = json.loads(msg.payload)
+            if not isinstance(payload, dict):
+                raise TypeError("job payload must be a JSON object")
+            if not isinstance(payload.get("message"), list):
+                raise TypeError("job payload requires a message list")
             priority = int(payload.get("priority", 5))
             self.spool.push(payload, priority)
             LOGGER.debug("Job queued: %s", payload.get("job_id"))
@@ -617,9 +622,10 @@ class MQTTBridge:
             "version": BRIDGE_VERSION,
         }
         if psutil:
+            temperatures = psutil.sensors_temperatures()
             info.update({
-                "cpu_temp": psutil.sensors_temperatures()["cpu-thermal"][0].current  # type: ignore[index]
-                if "cpu-thermal" in psutil.sensors_temperatures() else None,
+                "cpu_temp": temperatures["cpu-thermal"][0].current  # type: ignore[index]
+                if "cpu-thermal" in temperatures else None,
                 "cpu_percent": psutil.cpu_percent(interval=None),
                 "mem_available": psutil.virtual_memory().available,
             })

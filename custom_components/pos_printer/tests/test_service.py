@@ -64,6 +64,9 @@ class FakeHass:
     async def async_block_till_done(self):
         return
 
+    async def async_add_executor_job(self, target, *args):
+        return target(*args)
+
 
 @pytest.fixture(autouse=True)
 def mqtt_publish_mock(monkeypatch):
@@ -137,6 +140,7 @@ async def test_print_service_builds_message_from_gui_fields(mqtt_publish_mock):
             "barcode_text_position": 0,
             "barcode_attribute": 1,
             "image_content": "data:image/png;base64,iVBORw0KGgo=",
+            "image_process_on_host": False,
             "image_alignment": "right",
             "image_nv_key": 7,
         },
@@ -173,6 +177,105 @@ async def test_print_service_builds_message_from_gui_fields(mqtt_publish_mock):
             "content": "data:image/png;base64,iVBORw0KGgo=",
             "alignment": "right",
             "nv_key": 7,
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_print_text_service_builds_friendly_text_payload(mqtt_publish_mock):
+    """The simplified text service should build a readable receipt payload."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "printer"})
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print_text",
+        {
+            "title": "Kitchen",
+            "text": "Table 7\n2x Burger",
+            "footer": "Total: 19.90 EUR",
+            "alignment": "center",
+            "body_bold": True,
+        },
+        blocking=True,
+    )
+
+    payload = json.loads(mqtt_publish_mock[-1]["payload"])
+    assert payload["message"] == [
+        {
+            "type": "text",
+            "content": "Kitchen",
+            "alignment": "center",
+            "bold": True,
+            "double_height": True,
+        },
+        {
+            "type": "text",
+            "content": "Table 7",
+            "alignment": "center",
+            "bold": True,
+        },
+        {
+            "type": "text",
+            "content": "2x Burger",
+            "alignment": "center",
+            "bold": True,
+        },
+        {
+            "type": "text",
+            "content": "Total: 19.90 EUR",
+            "alignment": "center",
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_print_image_service_processes_on_home_assistant_host(
+    monkeypatch, mqtt_publish_mock
+):
+    """The image service should use the host-side preprocessing helper."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "printer"})
+
+    async def fake_prepare_image_content(hass, data, paper_width):
+        assert data["camera_entity_id"] == "camera.front_door"
+        assert paper_width == 80
+        return "data:image/png;base64,processed"
+
+    monkeypatch.setattr(
+        "custom_components.pos_printer.printer.async_prepare_image_content",
+        fake_prepare_image_content,
+    )
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print_image",
+        {
+            "title": "Doorbell",
+            "caption": "Motion detected",
+            "camera_entity_id": "camera.front_door",
+            "paper_width": 80,
+        },
+        blocking=True,
+    )
+
+    payload = json.loads(mqtt_publish_mock[-1]["payload"])
+    assert payload["message"] == [
+        {
+            "type": "text",
+            "content": "Doorbell",
+            "alignment": "center",
+            "bold": True,
+            "double_height": True,
+        },
+        {
+            "type": "image",
+            "content": "data:image/png;base64,processed",
+        },
+        {
+            "type": "text",
+            "content": "Motion detected",
+            "alignment": "center",
         },
     ]
 
@@ -405,7 +508,7 @@ async def test_status_handler_invalid_json_and_errors(monkeypatch, caplog):
 
 @pytest.mark.asyncio
 async def test_unload_print_service_removes_services_when_last_printer_removed():
-    """Unload should unsubscribe and remove services after last printer unload."""
+    """Unload should keep services but clear printer registrations."""
     hass = FakeHass()
     await setup_print_service(hass, {"printer_name": "one"})
     await setup_print_service(hass, {"printer_name": "two"})
@@ -414,4 +517,5 @@ async def test_unload_print_service_removes_services_when_last_printer_removed()
     assert (DOMAIN, "print") in hass.services._services
 
     await unload_print_service(hass, {"printer_name": "two"})
-    assert (DOMAIN, "print") not in hass.services._services
+    assert (DOMAIN, "print") in hass.services._services
+    assert hass.data[DOMAIN].printers == {}

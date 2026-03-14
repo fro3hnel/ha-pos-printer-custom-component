@@ -1,0 +1,7 @@
+pytest>=8.0.0,<9.0.0
+pytest-homeassistant-custom-component>=0.13.0
+Pillow>=10.4.0
+paho-mqtt>=1.6.1
+redis>=5.0.0
+python-dotenv>=1.0.0
+psutil>=5.9.0

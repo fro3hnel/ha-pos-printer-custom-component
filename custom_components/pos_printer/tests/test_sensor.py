@@ -5,29 +5,32 @@ import pytest
 
 from custom_components.pos_printer.const import DOMAIN
 from custom_components.pos_printer.sensor import (
+    BridgeVersionSensor,
     JobErrorBinarySensor,
     LastBridgeLogSensor,
+    LastJobDetailSensor,
     LastJobIdSensor,
     LastJobStatusSensor,
     LastStatusTimestampSensor,
+    QueueLengthSensor,
     SuccessfulJobsCounterSensor,
 )
 
 
 class FakeBus:
     def __init__(self) -> None:
-        self._cbs = []
+        self._cbs = {}
 
-    def async_listen(self, _event, cb):
-        self._cbs.append(cb)
+    def async_listen(self, event, cb):
+        self._cbs.setdefault(event, []).append(cb)
 
         def _remove() -> None:
-            self._cbs.remove(cb)
+            self._cbs[event].remove(cb)
 
         return _remove
 
-    def async_fire(self, _event, data):
-        for cb in list(self._cbs):
+    def async_fire(self, event, data):
+        for cb in list(self._cbs.get(event, [])):
             cb(SimpleNamespace(data=data))
 
 
@@ -46,7 +49,10 @@ async def test_sensors_update_states():
     sensors = [
         LastJobStatusSensor("printer", "entry"),
         LastJobIdSensor("printer", "entry"),
+        LastJobDetailSensor("printer", "entry"),
         LastStatusTimestampSensor("printer", "entry"),
+        QueueLengthSensor("printer", "entry"),
+        BridgeVersionSensor("printer", "entry"),
         LastBridgeLogSensor("printer", "entry"),
         JobErrorBinarySensor("printer", "entry"),
         SuccessfulJobsCounterSensor("printer", "entry"),
@@ -66,6 +72,16 @@ async def test_sensors_update_states():
             "timestamp": 1,
         },
     )
+    hass.bus.async_fire(
+        f"{DOMAIN}.bridge_log",
+        {
+            "printer_name": "other",
+            "message": "ignore me",
+            "level": "INFO",
+            "logger": "printer_bridge",
+            "timestamp": 2,
+        },
+    )
 
     # Matching printer updates sensors.
     hass.bus.async_fire(
@@ -74,7 +90,10 @@ async def test_sensors_update_states():
             "printer_name": "printer",
             "status": "success",
             "job_id": "1",
+            "detail": "",
             "timestamp": 1620000000,
+            "queue_len": 2,
+            "heartbeat": {"version": "0.2.0"},
         },
     )
     hass.bus.async_fire(
@@ -90,13 +109,16 @@ async def test_sensors_update_states():
 
     await hass.async_block_till_done()
 
-    assert sensors[0].state == "success"
-    assert sensors[1].state == "1"
-    assert sensors[2].native_value.timestamp() == 1620000000
-    assert sensors[3].state == "worker online"
-    assert sensors[3].extra_state_attributes["level"] == "INFO"
-    assert sensors[4].is_on is False
-    assert sensors[5].state == 1
+    assert sensors[0].native_value == "success"
+    assert sensors[1].native_value == "1"
+    assert sensors[2].native_value == ""
+    assert sensors[3].native_value.timestamp() == 1620000000
+    assert sensors[4].native_value == 2
+    assert sensors[5].native_value == "0.2.0"
+    assert sensors[6].native_value == "worker online"
+    assert sensors[6].extra_state_attributes["level"] == "INFO"
+    assert sensors[7].is_on is False
+    assert sensors[8].native_value == 1
 
 
 @pytest.mark.asyncio
@@ -110,10 +132,10 @@ async def test_sensor_removes_listener():
     assert hass.bus._cbs, "Listener was not registered"
 
     await sensor.async_will_remove_from_hass()
-    assert not hass.bus._cbs, "Listener was not removed"
+    assert not hass.bus._cbs[f"{DOMAIN}.status"], "Listener was not removed"
 
     hass.bus.async_fire(
         f"{DOMAIN}.status", {"printer_name": "printer", "status": "success"}
     )
     await hass.async_block_till_done()
-    assert sensor.state is None
+    assert sensor.native_value is None

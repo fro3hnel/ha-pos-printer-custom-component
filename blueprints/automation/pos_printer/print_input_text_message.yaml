@@ -1,0 +1,98 @@
+blueprint:
+  name: Print dashboard text helper to POS printer
+  description: Print the content of an input_text helper when an input_button is pressed.
+  domain: automation
+  input:
+    trigger_button:
+      name: Trigger button
+      selector:
+        entity:
+          filter:
+            - domain: input_button
+    message_text:
+      name: Text helper
+      selector:
+        entity:
+          filter:
+            - domain: input_text
+    printer_name:
+      name: Printer name
+      selector:
+        text:
+    title:
+      name: Optional title
+      default: ""
+      selector:
+        text:
+    alignment:
+      name: Text alignment
+      default: left
+      selector:
+        select:
+          options:
+            - left
+            - center
+            - right
+    body_bold:
+      name: Bold message text
+      default: false
+      selector:
+        boolean:
+    clear_after_print:
+      name: Clear helper after printing
+      default: false
+      selector:
+        boolean:
+    paper_width:
+      name: Paper width
+      default: 80
+      selector:
+        select:
+          options:
+            - label: 53 mm
+              value: 53
+            - label: 80 mm
+              value: 80
+    feed_after:
+      name: Feed after
+      default: 4
+      selector:
+        number:
+          min: 0
+          step: 1
+
+mode: queued
+max_exceeded: silent
+
+variables:
+  message_entity: !input message_text
+  clear_message: !input clear_after_print
+
+trigger:
+  - platform: state
+    entity_id: !input trigger_button
+
+condition:
+  - condition: template
+    value_template: "{{ states(message_entity) | trim != '' }}"
+
+action:
+  - service: pos_printer.print_text
+    data:
+      printer_name: !input printer_name
+      title: !input title
+      text: "{{ states(message_entity) }}"
+      alignment: !input alignment
+      body_bold: !input body_bold
+      paper_width: !input paper_width
+      feed_after: !input feed_after
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ clear_message }}"
+        sequence:
+          - service: input_text.set_value
+            target:
+              entity_id: !input message_text
+            data:
+              value: ""

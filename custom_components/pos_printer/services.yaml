@@ -1,17 +1,30 @@
 print:
   name: "Print POS Job"
-  description: "Build and send a print job fully via UI fields (text, barcode, image)."
+  description: "Advanced print service for fully custom POS jobs."
   fields:
     printer_name:
       name: "Printer"
-      description: "Name of the target printer (required when multiple printers are configured)."
+      description: "Target printer (required when multiple printers are configured)."
       example: "kitchen_printer"
       selector:
         text:
+    job:
+      name: "Full job object"
+      description: "Optional complete job object or JSON string."
+      advanced: true
+      selector:
+        object:
+    message:
+      name: "Message elements"
+      description: "Optional list of print elements or JSON string."
+      advanced: true
+      selector:
+        object:
     job_id:
       name: "Job ID"
       description: "Optional job identifier."
       example: "abc123"
+      advanced: true
       selector:
         text:
     priority:
@@ -25,19 +38,22 @@ print:
           max: 9
           step: 1
     paper_width:
-      name: "Paper Width"
+      name: "Paper width"
       description: "Paper width in mm."
       example: 80
       default: 80
       selector:
-        number:
-          min: 53
-          max: 80
-          step: 1
+        select:
+          options:
+            - label: "53 mm"
+              value: 53
+            - label: "80 mm"
+              value: 80
     feed_after:
-      name: "Feed After"
+      name: "Feed after"
       description: "Additional line feeds after printing."
       example: 4
+      default: 4
       selector:
         number:
           min: 0
@@ -46,6 +62,7 @@ print:
       name: "Expires"
       description: "Optional expiry in seconds."
       example: 60
+      advanced: true
       selector:
         number:
           min: 1
@@ -54,26 +71,24 @@ print:
       name: "Timestamp"
       description: "Optional timestamp (ISO-8601)."
       example: "2026-02-19T16:45:00+01:00"
+      advanced: true
       selector:
         text:
     text_content:
-      name: "Text Content"
-      description: "Single text block. If set, one text element is added."
-      example: "Hello, World!"
+      name: "Text content"
+      description: "Single text block."
       selector:
         text:
           multiline: true
     text_lines:
-      name: "Text Lines"
+      name: "Text lines"
       description: "Multiple text lines. Each line becomes its own text element."
-      example: "Starter\nBurger\nTotal: 19.90 EUR"
       selector:
         text:
           multiline: true
     text_alignment:
-      name: "Text Alignment"
-      description: "Text alignment for text fields."
-      example: "center"
+      name: "Text alignment"
+      description: "Alignment for text fields."
       default: "left"
       selector:
         select:
@@ -82,28 +97,29 @@ print:
             - "center"
             - "right"
     text_bold:
-      name: "Text Bold"
+      name: "Text bold"
       description: "Enable bold text."
       selector:
         boolean:
     text_underline:
-      name: "Text Underline"
+      name: "Text underline"
       description: "Enable underlined text."
       selector:
         boolean:
     text_italic:
-      name: "Text Italic"
+      name: "Text italic"
       description: "Enable italic text."
       selector:
         boolean:
     text_double_height:
-      name: "Text Double Height"
+      name: "Text double height"
       description: "Enable double-height text."
       selector:
         boolean:
     text_font:
-      name: "Text Font"
+      name: "Text font"
       description: "Font for text elements."
+      advanced: true
       selector:
         select:
           options:
@@ -111,21 +127,21 @@ print:
             - "B"
             - "C"
     text_size:
-      name: "Text Size"
+      name: "Text size"
       description: "Text size (1-8)."
+      advanced: true
       selector:
         number:
           min: 1
           max: 8
           step: 1
     barcode_content:
-      name: "Barcode Content"
-      description: "Barcode payload. If set, a barcode element is added."
-      example: "12345678"
+      name: "Barcode content"
+      description: "Barcode payload."
       selector:
         text:
     barcode_type:
-      name: "Barcode Type"
+      name: "Barcode type"
       description: "Barcode type."
       default: "code128"
       selector:
@@ -140,25 +156,26 @@ print:
             - "code128"
             - "qr-code"
     barcode_height:
-      name: "Barcode Height"
+      name: "Barcode height"
       description: "Barcode height in dots."
-      example: 50
+      advanced: true
       selector:
         number:
           min: 0
           step: 1
     barcode_width:
-      name: "Barcode Width"
+      name: "Barcode width"
       description: "Barcode module width."
-      example: 2
+      advanced: true
       selector:
         number:
           min: 1
           max: 20
           step: 1
     barcode_ecc_level:
-      name: "Barcode ECC Level"
+      name: "Barcode ECC level"
       description: "QR error correction level."
+      advanced: true
       selector:
         select:
           options:
@@ -167,15 +184,18 @@ print:
             - "Q"
             - "H"
     barcode_mode:
-      name: "Barcode Mode"
-      description: "2D barcode mode/model."
+      name: "Barcode mode"
+      description: "2D barcode mode or model."
+      advanced: true
       selector:
         number:
           min: 0
           step: 1
     barcode_alignment:
-      name: "Barcode Alignment"
+      name: "Barcode alignment"
       description: "Barcode alignment."
+      default: "left"
+      advanced: true
       selector:
         select:
           options:
@@ -183,29 +203,57 @@ print:
             - "center"
             - "right"
     barcode_text_position:
-      name: "Barcode Text Position"
+      name: "Barcode text position"
       description: "Human-readable text position."
+      advanced: true
       selector:
         number:
           min: 0
           step: 1
     barcode_attribute:
-      name: "Barcode Attribute"
+      name: "Barcode attribute"
       description: "Additional barcode attributes."
+      advanced: true
       selector:
         number:
           min: 0
           step: 1
+    camera_entity_id:
+      name: "Camera"
+      description: "Use an image from a Home Assistant camera entity."
+      selector:
+        entity:
+          filter:
+            - domain: camera
+    image_media_source:
+      name: "Media source image"
+      description: "Select an image from the local Home Assistant media browser."
+      selector:
+        media:
+          accept:
+            - image/*
+    image_path:
+      name: "Local image path"
+      description: "Path inside the Home Assistant config, media, or www folder."
+      example: "media/receipt/logo.png"
+      selector:
+        text:
+    image_url:
+      name: "Image URL"
+      description: "HTTP(S) or file:// URL resolved on the Home Assistant host."
+      selector:
+        text:
     image_content:
-      name: "Image Content"
-      description: "Image payload as Base64, data URI, or URI. If set, an image element is added."
+      name: "Image content"
+      description: "Raw image data as Base64 or data URI."
+      advanced: true
       selector:
         text:
           multiline: true
     image_alignment:
-      name: "Image Alignment"
-      description: "Image alignment."
-      default: "left"
+      name: "Image alignment"
+      description: "Alignment for the image element."
+      default: "center"
       selector:
         select:
           options:
@@ -213,11 +261,362 @@ print:
             - "center"
             - "right"
     image_nv_key:
-      name: "Image NV Key"
+      name: "Image NV key"
       description: "NV image key (0-255)."
       default: 1
+      advanced: true
       selector:
         number:
           min: 0
           max: 255
+          step: 1
+    image_process_on_host:
+      name: "Process image on Home Assistant"
+      description: "Resize and dither the image on the Home Assistant host before sending it to the Pi."
+      default: true
+      selector:
+        boolean:
+    image_max_width:
+      name: "Image max width"
+      description: "Optional maximum width in pixels. Defaults to the paper width profile."
+      advanced: true
+      selector:
+        number:
+          min: 1
+          step: 1
+    image_threshold:
+      name: "Image threshold"
+      description: "Black/white threshold when dithering is disabled."
+      advanced: true
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+    image_dither:
+      name: "Image dithering"
+      description: "Use Floyd-Steinberg dithering for better grayscale photos."
+      default: true
+      selector:
+        boolean:
+    image_invert:
+      name: "Invert image"
+      description: "Invert black and white before printing."
+      advanced: true
+      selector:
+        boolean:
+    image_rotation:
+      name: "Image rotation"
+      description: "Rotate the image on the Home Assistant host."
+      default: 0
+      advanced: true
+      selector:
+        select:
+          options:
+            - label: "0°"
+              value: 0
+            - label: "90°"
+              value: 90
+            - label: "180°"
+              value: 180
+            - label: "270°"
+              value: 270
+    image_fetch_timeout:
+      name: "Image fetch timeout"
+      description: "Timeout for camera and URL image sources."
+      default: 15
+      advanced: true
+      selector:
+        number:
+          min: 1
+          max: 120
+          step: 1
+
+print_text:
+  name: "Print text message"
+  description: "Dashboard-friendly text printing for short notes, helper text, and automation messages."
+  fields:
+    printer_name:
+      name: "Printer"
+      description: "Target printer (required when multiple printers are configured)."
+      selector:
+        text:
+    title:
+      name: "Title"
+      description: "Optional title line printed larger and bold by default."
+      selector:
+        text:
+    text:
+      name: "Text"
+      description: "Main text to print."
+      required: true
+      selector:
+        text:
+          multiline: true
+    footer:
+      name: "Footer"
+      description: "Optional footer printed after the message."
+      selector:
+        text:
+          multiline: true
+    alignment:
+      name: "Text alignment"
+      description: "Alignment for the main text."
+      default: "left"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    title_alignment:
+      name: "Title alignment"
+      description: "Alignment for the title."
+      default: "center"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    footer_alignment:
+      name: "Footer alignment"
+      description: "Alignment for the footer."
+      default: "left"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    title_bold:
+      name: "Bold title"
+      description: "Print the title in bold."
+      default: true
+      advanced: true
+      selector:
+        boolean:
+    title_double_height:
+      name: "Large title"
+      description: "Print the title in double height."
+      default: true
+      advanced: true
+      selector:
+        boolean:
+    body_bold:
+      name: "Bold text"
+      description: "Print the main text in bold."
+      advanced: true
+      selector:
+        boolean:
+    footer_bold:
+      name: "Bold footer"
+      description: "Print the footer in bold."
+      advanced: true
+      selector:
+        boolean:
+    priority:
+      name: "Priority"
+      description: "Print priority (0-9, 0 = highest)."
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 9
+          step: 1
+    paper_width:
+      name: "Paper width"
+      description: "Paper width in mm."
+      default: 80
+      selector:
+        select:
+          options:
+            - label: "53 mm"
+              value: 53
+            - label: "80 mm"
+              value: 80
+    feed_after:
+      name: "Feed after"
+      description: "Additional line feeds after printing."
+      default: 4
+      selector:
+        number:
+          min: 0
+          step: 1
+
+print_image:
+  name: "Print image"
+  description: "Image-focused printing with preprocessing on the Home Assistant host."
+  fields:
+    printer_name:
+      name: "Printer"
+      description: "Target printer (required when multiple printers are configured)."
+      selector:
+        text:
+    title:
+      name: "Title"
+      description: "Optional title printed before the image."
+      selector:
+        text:
+    caption:
+      name: "Caption"
+      description: "Optional caption printed after the image."
+      selector:
+        text:
+          multiline: true
+    camera_entity_id:
+      name: "Camera"
+      description: "Use an image from a Home Assistant camera entity."
+      selector:
+        entity:
+          filter:
+            - domain: camera
+    image_media_source:
+      name: "Media source image"
+      description: "Select an image from the local Home Assistant media browser."
+      selector:
+        media:
+          accept:
+            - image/*
+    image_path:
+      name: "Local image path"
+      description: "Path inside the Home Assistant config, media, or www folder."
+      selector:
+        text:
+    image_url:
+      name: "Image URL"
+      description: "HTTP(S) or file:// URL resolved on the Home Assistant host."
+      selector:
+        text:
+    image_content:
+      name: "Image content"
+      description: "Raw image data as Base64 or data URI."
+      advanced: true
+      selector:
+        text:
+          multiline: true
+    image_alignment:
+      name: "Image alignment"
+      description: "Alignment for the image element."
+      default: "center"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    title_alignment:
+      name: "Title alignment"
+      description: "Alignment for the title."
+      default: "center"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    caption_alignment:
+      name: "Caption alignment"
+      description: "Alignment for the caption."
+      default: "center"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    caption_bold:
+      name: "Bold caption"
+      description: "Print the caption in bold."
+      advanced: true
+      selector:
+        boolean:
+    image_process_on_host:
+      name: "Process image on Home Assistant"
+      description: "Resize and dither the image on the Home Assistant host before sending it to the Pi."
+      default: true
+      selector:
+        boolean:
+    image_max_width:
+      name: "Image max width"
+      description: "Optional maximum width in pixels."
+      advanced: true
+      selector:
+        number:
+          min: 1
+          step: 1
+    image_threshold:
+      name: "Image threshold"
+      description: "Black/white threshold when dithering is disabled."
+      advanced: true
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+    image_dither:
+      name: "Image dithering"
+      description: "Use Floyd-Steinberg dithering for better grayscale photos."
+      default: true
+      selector:
+        boolean:
+    image_invert:
+      name: "Invert image"
+      description: "Invert black and white before printing."
+      advanced: true
+      selector:
+        boolean:
+    image_rotation:
+      name: "Image rotation"
+      description: "Rotate the image on the Home Assistant host."
+      default: 0
+      advanced: true
+      selector:
+        select:
+          options:
+            - label: "0°"
+              value: 0
+            - label: "90°"
+              value: 90
+            - label: "180°"
+              value: 180
+            - label: "270°"
+              value: 270
+    image_fetch_timeout:
+      name: "Image fetch timeout"
+      description: "Timeout for camera and URL image sources."
+      default: 15
+      advanced: true
+      selector:
+        number:
+          min: 1
+          max: 120
+          step: 1
+    priority:
+      name: "Priority"
+      description: "Print priority (0-9, 0 = highest)."
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 9
+          step: 1
+    paper_width:
+      name: "Paper width"
+      description: "Paper width in mm."
+      default: 80
+      selector:
+        select:
+          options:
+            - label: "53 mm"
+              value: 53
+            - label: "80 mm"
+              value: 80
+    feed_after:
+      name: "Feed after"
+      description: "Additional line feeds after printing."
+      default: 4
+      selector:
+        number:
+          min: 0
           step: 1

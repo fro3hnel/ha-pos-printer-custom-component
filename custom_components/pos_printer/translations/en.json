@@ -2,9 +2,23 @@
   "pos_printer": {
     "title": "POS-Printer Bridge",
     "config": {
+      "abort": {
+        "invalid_discovery": "The MQTT discovery payload is invalid.",
+        "already_configured": "This printer is already configured."
+      },
+      "error": {
+        "invalid_printer_name": "Printer names may only contain lowercase letters, numbers, underscores, and hyphens."
+      },
       "step": {
         "user": {
           "title": "Set up POS-Printer Bridge",
+          "data": {
+            "printer_name": "Printer name"
+          }
+        },
+        "reconfigure": {
+          "title": "Reconfigure POS-Printer Bridge",
+          "description": "Update the printer name used for MQTT topics.",
           "data": {
             "printer_name": "Printer name"
           }
@@ -14,7 +28,10 @@
     "sensor": {
       "last_job_status": "Status of last print job",
       "last_job_id": "ID of last print job",
+      "last_job_detail": "Detail of last print job",
       "last_status_update": "Last status update",
+      "queue_length": "Queue length",
+      "bridge_version": "Bridge version",
       "last_bridge_log": "Last bridge log message",
       "successful_jobs": "Successful print jobs"
     },
@@ -34,8 +51,11 @@
       "error": "Error"
     },
     "options": {
+      "error": {
+        "invalid_printer_name": "Printer names may only contain lowercase letters, numbers, underscores, and hyphens."
+      },
       "step": {
-        "user": {
+        "init": {
           "title": "POS-Printer Bridge options",
           "data": {
             "printer_name": "Printer name"
@@ -43,14 +63,32 @@
         }
       }
     },
+    "issues": {
+      "invalid_printer_name": {
+        "title": "Printer name should be reconfigured",
+        "description": "The configured printer name `{printer_name}` is not safe for MQTT topics. Reconfigure the integration to use only lowercase letters, numbers, underscores, and hyphens."
+      },
+      "outdated_bridge_version": {
+        "title": "Bridge software is outdated",
+        "description": "The bridge for `{printer_name}` reports version `{bridge_version}`. Update the Raspberry Pi bridge to at least `{minimum_version}` so it matches the installed Home Assistant integration."
+      }
+    },
     "services": {
       "print": {
         "name": "Send print job",
-        "description": "Build and send a print job fully via UI fields.",
+        "description": "Advanced print service for fully custom POS jobs with optional host-side image processing.",
         "fields": {
           "printer_name": {
             "name": "Printer",
-            "description": "Target printer (required when multiple printers are configured)."
+            "description": "Target printer."
+          },
+          "job": {
+            "name": "Full job object",
+            "description": "Optional complete job object or JSON string."
+          },
+          "message": {
+            "name": "Message elements",
+            "description": "Optional list of print elements or JSON string."
           },
           "job_id": {
             "name": "Job ID",
@@ -78,7 +116,7 @@
           },
           "text_content": {
             "name": "Text content",
-            "description": "Text element content."
+            "description": "Single text block."
           },
           "text_lines": {
             "name": "Text lines",
@@ -134,7 +172,7 @@
           },
           "barcode_mode": {
             "name": "Barcode mode",
-            "description": "2D barcode mode/model."
+            "description": "2D barcode mode or model."
           },
           "barcode_alignment": {
             "name": "Barcode alignment",
@@ -148,9 +186,25 @@
             "name": "Barcode attribute",
             "description": "Additional barcode attributes."
           },
+          "camera_entity_id": {
+            "name": "Camera",
+            "description": "Use a Home Assistant camera entity as the image source."
+          },
+          "image_media_source": {
+            "name": "Media source image",
+            "description": "Image selected from the local Home Assistant media browser."
+          },
+          "image_path": {
+            "name": "Local image path",
+            "description": "Path inside the config, media, or www directory."
+          },
+          "image_url": {
+            "name": "Image URL",
+            "description": "HTTP(S) or file:// URL resolved on the Home Assistant host."
+          },
           "image_content": {
             "name": "Image content",
-            "description": "Image payload as Base64, data URI, or URI."
+            "description": "Raw image data as Base64 or data URI."
           },
           "image_alignment": {
             "name": "Image alignment",
@@ -159,6 +213,190 @@
           "image_nv_key": {
             "name": "Image NV key",
             "description": "NV image key (0-255)."
+          },
+          "image_process_on_host": {
+            "name": "Process image on Home Assistant",
+            "description": "Resize and dither the image on the Home Assistant host before sending it to the Pi."
+          },
+          "image_max_width": {
+            "name": "Image max width",
+            "description": "Optional maximum image width in pixels."
+          },
+          "image_threshold": {
+            "name": "Image threshold",
+            "description": "Black/white threshold when dithering is disabled."
+          },
+          "image_dither": {
+            "name": "Image dithering",
+            "description": "Use Floyd-Steinberg dithering."
+          },
+          "image_invert": {
+            "name": "Invert image",
+            "description": "Invert black and white before printing."
+          },
+          "image_rotation": {
+            "name": "Image rotation",
+            "description": "Rotate the image on the Home Assistant host."
+          },
+          "image_fetch_timeout": {
+            "name": "Image fetch timeout",
+            "description": "Timeout for camera and URL image sources."
+          }
+        }
+      },
+      "print_text": {
+        "name": "Print text message",
+        "description": "Dashboard-friendly text printing for notes, helper text, and automation messages.",
+        "fields": {
+          "printer_name": {
+            "name": "Printer",
+            "description": "Target printer."
+          },
+          "title": {
+            "name": "Title",
+            "description": "Optional title printed before the body."
+          },
+          "text": {
+            "name": "Text",
+            "description": "Main text to print."
+          },
+          "footer": {
+            "name": "Footer",
+            "description": "Optional footer printed after the body."
+          },
+          "alignment": {
+            "name": "Text alignment",
+            "description": "Alignment for the main text."
+          },
+          "title_alignment": {
+            "name": "Title alignment",
+            "description": "Alignment for the title."
+          },
+          "footer_alignment": {
+            "name": "Footer alignment",
+            "description": "Alignment for the footer."
+          },
+          "title_bold": {
+            "name": "Bold title",
+            "description": "Print the title in bold."
+          },
+          "title_double_height": {
+            "name": "Large title",
+            "description": "Print the title in double height."
+          },
+          "body_bold": {
+            "name": "Bold text",
+            "description": "Print the main text in bold."
+          },
+          "footer_bold": {
+            "name": "Bold footer",
+            "description": "Print the footer in bold."
+          },
+          "priority": {
+            "name": "Priority",
+            "description": "Print priority (0-9, 0 = highest)."
+          },
+          "paper_width": {
+            "name": "Paper width",
+            "description": "Paper width in mm."
+          },
+          "feed_after": {
+            "name": "Feed after",
+            "description": "Additional line feeds after printing."
+          }
+        }
+      },
+      "print_image": {
+        "name": "Print image",
+        "description": "Image-focused printing with preprocessing on the Home Assistant host.",
+        "fields": {
+          "printer_name": {
+            "name": "Printer",
+            "description": "Target printer."
+          },
+          "title": {
+            "name": "Title",
+            "description": "Optional title printed before the image."
+          },
+          "caption": {
+            "name": "Caption",
+            "description": "Optional caption printed after the image."
+          },
+          "camera_entity_id": {
+            "name": "Camera",
+            "description": "Use a Home Assistant camera entity as the image source."
+          },
+          "image_media_source": {
+            "name": "Media source image",
+            "description": "Image selected from the local Home Assistant media browser."
+          },
+          "image_path": {
+            "name": "Local image path",
+            "description": "Path inside the config, media, or www directory."
+          },
+          "image_url": {
+            "name": "Image URL",
+            "description": "HTTP(S) or file:// URL resolved on the Home Assistant host."
+          },
+          "image_content": {
+            "name": "Image content",
+            "description": "Raw image data as Base64 or data URI."
+          },
+          "image_alignment": {
+            "name": "Image alignment",
+            "description": "Image alignment."
+          },
+          "title_alignment": {
+            "name": "Title alignment",
+            "description": "Alignment for the title."
+          },
+          "caption_alignment": {
+            "name": "Caption alignment",
+            "description": "Alignment for the caption."
+          },
+          "caption_bold": {
+            "name": "Bold caption",
+            "description": "Print the caption in bold."
+          },
+          "image_process_on_host": {
+            "name": "Process image on Home Assistant",
+            "description": "Resize and dither the image on the Home Assistant host before sending it to the Pi."
+          },
+          "image_max_width": {
+            "name": "Image max width",
+            "description": "Optional maximum image width in pixels."
+          },
+          "image_threshold": {
+            "name": "Image threshold",
+            "description": "Black/white threshold when dithering is disabled."
+          },
+          "image_dither": {
+            "name": "Image dithering",
+            "description": "Use Floyd-Steinberg dithering."
+          },
+          "image_invert": {
+            "name": "Invert image",
+            "description": "Invert black and white before printing."
+          },
+          "image_rotation": {
+            "name": "Image rotation",
+            "description": "Rotate the image on the Home Assistant host."
+          },
+          "image_fetch_timeout": {
+            "name": "Image fetch timeout",
+            "description": "Timeout for camera and URL image sources."
+          },
+          "priority": {
+            "name": "Priority",
+            "description": "Print priority (0-9, 0 = highest)."
+          },
+          "paper_width": {
+            "name": "Paper width",
+            "description": "Paper width in mm."
+          },
+          "feed_after": {
+            "name": "Feed after",
+            "description": "Additional line feeds after printing."
           }
         }
       }

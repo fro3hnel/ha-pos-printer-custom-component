@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from custom_components.pos_printer.const import DOMAIN
-from custom_components.pos_printer.update import BridgeUpdateEntity
+from custom_components.pos_printer.models import PrinterRuntimeData
+from custom_components.pos_printer.update import BridgeUpdateEntity, async_setup_entry
 
 
 class FakeBus:
@@ -52,6 +53,8 @@ async def test_update_entity_installs_exact_version(mqtt_publish_mock):
     hass = FakeHass()
     entity = BridgeUpdateEntity("printer", "entry")
     entity.hass = hass
+    entity.entity_id = "update.printer_bridge"
+    entity.async_write_ha_state = lambda: None
     await entity.async_added_to_hass()
 
     # Event from different printer should be ignored.
@@ -78,6 +81,8 @@ async def test_update_entity_installs_requested_version(mqtt_publish_mock):
     hass = FakeHass()
     entity = BridgeUpdateEntity("printer", "entry")
     entity.hass = hass
+    entity.entity_id = "update.printer_bridge"
+    entity.async_write_ha_state = lambda: None
     await entity.async_added_to_hass()
 
     hass.bus.async_fire(f"{DOMAIN}.status", {"printer_name": "printer", "version": "0.1.0"})
@@ -110,3 +115,24 @@ async def test_update_entity_removes_listener():
     )
     await hass.async_block_till_done()
     assert entity.installed_version is None
+
+
+@pytest.mark.asyncio
+async def test_update_platform_setup_uses_runtime_data():
+    """Platform setup should add the update entity for the effective printer name."""
+    added = []
+    entry = SimpleNamespace(
+        entry_id="entry",
+        data={"printer_name": "from_data"},
+        options={},
+        runtime_data=PrinterRuntimeData(
+            entry_id="entry",
+            printer_name="from_runtime",
+            print_topic="p",
+            status_topic="s",
+            log_topic="l",
+        ),
+    )
+
+    await async_setup_entry(FakeHass(), entry, added.extend)
+    assert added[0]._printer_name == "from_runtime"

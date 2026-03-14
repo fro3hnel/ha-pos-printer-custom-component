@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="hass-pos-printer-bridge",
-    version="0.1.0",
+    version="0.2.0",
     description="Home-Assistant POS-Printer Bridge for Bixolon printers",
     author="Your Name",
     author_email="you@example.com",
@@ -25,4 +25,3 @@ setup(
         "Operating System :: POSIX :: Linux",
     ],
 )
-
