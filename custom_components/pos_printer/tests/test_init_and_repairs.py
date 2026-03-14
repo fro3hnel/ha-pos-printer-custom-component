@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import custom_components.pos_printer as integration
+from custom_components.pos_printer.const import VERSION
 from custom_components.pos_printer.binary_sensor import async_setup_entry as setup_binary_sensor
 from custom_components.pos_printer.models import PrinterRuntimeData
 from custom_components.pos_printer.repairs import (
@@ -119,7 +120,7 @@ def test_repairs_helpers_create_and_clear_issues(monkeypatch):
     async_validate_entry_issues(hass, entry)
     async_validate_printer_name_issue(hass, FakeEntry("valid_printer"), "valid_printer")
     async_validate_bridge_version_issue(hass, entry.entry_id, "printer", "0.1.0")
-    async_validate_bridge_version_issue(hass, entry.entry_id, "printer", "0.2.0")
+    async_validate_bridge_version_issue(hass, entry.entry_id, "printer", VERSION)
     async_validate_bridge_version_issue(hass, entry.entry_id, "printer", None)
     async_validate_bridge_version_issue(hass, entry.entry_id, "printer", "broken")
     async_clear_entry_issues(hass, entry.entry_id)

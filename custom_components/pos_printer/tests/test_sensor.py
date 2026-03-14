@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from custom_components.pos_printer.const import DOMAIN
+from custom_components.pos_printer.const import DOMAIN, VERSION
 from custom_components.pos_printer.sensor import (
     BridgeVersionSensor,
     JobErrorBinarySensor,
@@ -93,7 +93,7 @@ async def test_sensors_update_states():
             "detail": "",
             "timestamp": 1620000000,
             "queue_len": 2,
-            "heartbeat": {"version": "0.2.0"},
+            "heartbeat": {"version": VERSION},
         },
     )
     hass.bus.async_fire(
@@ -114,7 +114,7 @@ async def test_sensors_update_states():
     assert sensors[2].native_value == ""
     assert sensors[3].native_value.timestamp() == 1620000000
     assert sensors[4].native_value == 2
-    assert sensors[5].native_value == "0.2.0"
+    assert sensors[5].native_value == VERSION
     assert sensors[6].native_value == "worker online"
     assert sensors[6].extra_state_attributes["level"] == "INFO"
     assert sensors[7].is_on is False

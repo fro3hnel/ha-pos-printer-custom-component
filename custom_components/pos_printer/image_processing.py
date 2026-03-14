@@ -20,10 +20,11 @@ from .const import (
     DEFAULT_IMAGE_THRESHOLD,
     DEFAULT_PAPER_WIDTH,
     PAPER_WIDTH_TO_PIXELS,
+    VERSION,
 )
 
 _MEDIA_SOURCE_PREFIX = "media-source://media_source/local/"
-_IMAGE_USER_AGENT = "ha-pos-printer/0.2.0"
+_IMAGE_USER_AGENT = f"ha-pos-printer/{VERSION}"
 _ALLOWED_RELATIVE_ROOTS = ("media", "www")
 
 

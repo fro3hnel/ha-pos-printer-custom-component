@@ -220,6 +220,31 @@ python3 -m pip install -r requirements_test.txt
 python3 -m pytest
 ```
 
+## Releasing
+
+Use the local release helper from the repository root:
+
+```bash
+python3 scripts/release.py --bump patch
+```
+
+What the script does:
+
+- validates that integration and bridge versions are aligned
+- bumps the version in `custom_components/pos_printer/manifest.json` and `bridge/bridge_version.py`
+- runs `pytest` by default
+- builds `dist/releases/<version>/pos_printer-v<version>.zip` for manual Home Assistant installs
+- generates `dist/releases/<version>/RELEASE_NOTES.md`
+
+Useful options:
+
+- `--version 0.3.0` to set an explicit release version
+- `--skip-tests` if you intentionally want to bypass `pytest`
+- `--commit --tag` to create the release commit and the git tag automatically
+- `--dry-run --allow-dirty` to preview the next release without changing files
+
+Important: the git tag created by the script intentionally matches the plain version number, for example `0.3.0`. The bridge self-update flow installs from that exact tag name.
+
 ## Minimal Raspberry Pi Zero W Image Build
 
 The repository also contains `pi-gen-builder/` for building a minimal Raspberry Pi OS Lite image with the bridge preinstalled:

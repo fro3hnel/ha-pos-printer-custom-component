@@ -1,13 +1,29 @@
+import re
+from pathlib import Path
+
 from setuptools import setup
+
+
+def _read_bridge_version() -> str:
+    """Read the bridge version without importing runtime dependencies."""
+    version_file = Path(__file__).with_name("bridge_version.py")
+    content = version_file.read_text(encoding="utf-8")
+    match = re.search(r'^BRIDGE_VERSION = "([^"]+)"$', content, re.MULTILINE)
+    if match is None:
+        raise RuntimeError("Unable to determine bridge version")
+    return match.group(1)
+
+
+BRIDGE_VERSION = _read_bridge_version()
 
 setup(
     name="hass-pos-printer-bridge",
-    version="0.2.0",
+    version=BRIDGE_VERSION,
     description="Home-Assistant POS-Printer Bridge for Bixolon printers",
     author="Your Name",
     author_email="you@example.com",
     python_requires=">=3.8",
-    py_modules=["printer_bridge"],
+    py_modules=["printer_bridge", "bridge_version"],
     install_requires=[
         "paho-mqtt",
         "redis",

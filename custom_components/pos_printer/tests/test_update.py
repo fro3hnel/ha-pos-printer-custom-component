@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from custom_components.pos_printer.const import DOMAIN
+from custom_components.pos_printer.const import DOMAIN, VERSION
 from custom_components.pos_printer.models import PrinterRuntimeData
 from custom_components.pos_printer.update import BridgeUpdateEntity, async_setup_entry
 
@@ -89,12 +89,12 @@ async def test_update_entity_installs_requested_version(mqtt_publish_mock):
     await hass.async_block_till_done()
     assert entity.installed_version == "0.1.0"
 
-    await entity.async_install("0.2.0", False)
+    await entity.async_install(VERSION, False)
     assert mqtt_publish_mock, "mqtt.async_publish was not called"
     call = mqtt_publish_mock[-1]
     assert call["topic"] == "print/pos/printer/update"
     payload = json.loads(call["payload"])
-    assert payload["version"] == "0.2.0"
+    assert payload["version"] == VERSION
 
 
 @pytest.mark.asyncio

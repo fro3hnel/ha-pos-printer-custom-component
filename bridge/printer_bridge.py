@@ -63,6 +63,7 @@ from typing import Any, ClassVar, Dict, List
 
 import paho.mqtt.client as mqtt
 import redis
+from bridge_version import BRIDGE_VERSION
 from dotenv import load_dotenv
 from PIL import Image
 
@@ -72,8 +73,6 @@ except ImportError:
     psutil = None  # pragma: no cover
 
 load_dotenv()
-
-BRIDGE_VERSION = "0.2.0"
 REPO_URL = "https://github.com/fro3hnel/ha-pos-printer-custom-component.git"
 
 @dataclass(slots=True)

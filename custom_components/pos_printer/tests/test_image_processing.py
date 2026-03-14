@@ -12,6 +12,7 @@ import pytest
 from homeassistant.exceptions import HomeAssistantError
 from PIL import Image
 
+from custom_components.pos_printer.const import VERSION
 from custom_components.pos_printer.image_processing import (
     _decode_data_uri,
     _decode_image_content,
@@ -217,7 +218,7 @@ async def test_remote_fetch_and_missing_payload_branches(tmp_path, monkeypatch):
         {"image_url": "https://example.com/logo.png", "image_fetch_timeout": 5},
     )
     assert result == b"remote-bytes"
-    assert calls == [("https://example.com/logo.png", 5, "ha-pos-printer/0.2.0")]
+    assert calls == [("https://example.com/logo.png", 5, f"ha-pos-printer/{VERSION}")]
 
     monkeypatch.setattr(
         "custom_components.pos_printer.image_processing.async_get_clientsession",
