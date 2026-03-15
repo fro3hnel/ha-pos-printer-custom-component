@@ -13,59 +13,96 @@ CUSTOM_STAGE_SRC="${SCRIPT_DIR}/${CUSTOM_STAGE_NAME}"
 CUSTOM_STAGE_DST="${PIGEN_DIR}/${CUSTOM_STAGE_NAME}"
 BRIDGE_SRC="${REPO_ROOT}/bridge"
 BRIDGE_DST="${CUSTOM_STAGE_DST}/files/opt/pos-printer-bridge"
+GENERATED_CONFIG="${WORK_DIR}/config.generated"
 
-for cmd in docker git rsync; do
+log() {
+    printf '[pi-gen-builder] %s\n' "$*"
+}
+
+require_command() {
+    local cmd="$1"
     if ! command -v "${cmd}" >/dev/null 2>&1; then
         echo "Missing required command: ${cmd}" >&2
         exit 1
     fi
-done
+}
 
-if [ ! -d "${CUSTOM_STAGE_SRC}" ]; then
-    echo "Missing custom stage directory: ${CUSTOM_STAGE_SRC}" >&2
-    exit 1
-fi
+ensure_checkout() {
+    if [ ! -d "${PIGEN_DIR}/.git" ]; then
+        log "Cloning pi-gen from ${PIGEN_REPO}"
+        git clone "${PIGEN_REPO}" "${PIGEN_DIR}"
+    fi
 
-if [ ! -d "${BRIDGE_SRC}" ]; then
-    echo "Missing bridge directory: ${BRIDGE_SRC}" >&2
-    exit 1
-fi
+    log "Fetching latest pi-gen refs"
+    git -C "${PIGEN_DIR}" fetch --tags --prune origin
 
-mkdir -p "${WORK_DIR}"
+    if git -C "${PIGEN_DIR}" rev-parse --verify --quiet "refs/remotes/origin/${PIGEN_REF}" >/dev/null; then
+        log "Checking out pi-gen branch origin/${PIGEN_REF}"
+        git -C "${PIGEN_DIR}" -c advice.detachedHead=false checkout --detach "origin/${PIGEN_REF}"
+        return
+    fi
 
-if [ ! -d "${PIGEN_DIR}/.git" ]; then
-    git clone "${PIGEN_REPO}" "${PIGEN_DIR}"
-fi
+    log "Checking out pi-gen ref ${PIGEN_REF}"
+    git -C "${PIGEN_DIR}" -c advice.detachedHead=false checkout --detach "${PIGEN_REF}"
+}
 
-git -C "${PIGEN_DIR}" fetch --tags --prune origin
-git -C "${PIGEN_DIR}" checkout "${PIGEN_REF}"
+sync_custom_stage() {
+    log "Preparing custom stage ${CUSTOM_STAGE_NAME}"
+    rm -rf "${CUSTOM_STAGE_DST}"
+    mkdir -p "${CUSTOM_STAGE_DST}"
+    rsync -a --delete "${CUSTOM_STAGE_SRC}/" "${CUSTOM_STAGE_DST}/"
 
-if git -C "${PIGEN_DIR}" ls-remote --exit-code --heads origin "${PIGEN_REF}" >/dev/null 2>&1; then
-    git -C "${PIGEN_DIR}" pull --ff-only origin "${PIGEN_REF}"
-fi
+    log "Syncing bridge runtime into custom stage"
+    mkdir -p "${BRIDGE_DST}"
+    rsync -a --delete \
+        --exclude '__pycache__/' \
+        --exclude '.pytest_cache/' \
+        --exclude 'tests/' \
+        --exclude '*.pyc' \
+        --exclude 'README.md' \
+        --exclude 'install.sh' \
+        --exclude 'create-image.py' \
+        "${BRIDGE_SRC}/" "${BRIDGE_DST}/"
 
-cp "${SCRIPT_DIR}/config" "${PIGEN_DIR}/config"
+    mkdir -p "${BRIDGE_DST}/schema"
+    install -m 0644 \
+        "${REPO_ROOT}/schema/job.schema.json" \
+        "${BRIDGE_DST}/schema/job.schema.json"
+}
 
-rm -rf "${CUSTOM_STAGE_DST}"
-mkdir -p "${CUSTOM_STAGE_DST}"
-rsync -a --delete "${CUSTOM_STAGE_SRC}/" "${CUSTOM_STAGE_DST}/"
+write_generated_config() {
+    log "Generating pi-gen config"
+    cp "${SCRIPT_DIR}/config" "${GENERATED_CONFIG}"
+    cp "${GENERATED_CONFIG}" "${PIGEN_DIR}/config"
+}
 
-mkdir -p "${BRIDGE_DST}"
-install -m 0755 \
-    "${BRIDGE_SRC}/printer_bridge.py" \
-    "${BRIDGE_DST}/printer_bridge.py"
+main() {
+    require_command docker
+    require_command git
+    require_command rsync
 
-if [ -f "${BRIDGE_SRC}/LICENSE" ]; then
-    install -m 0644 "${BRIDGE_SRC}/LICENSE" "${BRIDGE_DST}/LICENSE"
-fi
+    if [ ! -d "${CUSTOM_STAGE_SRC}" ]; then
+        echo "Missing custom stage directory: ${CUSTOM_STAGE_SRC}" >&2
+        exit 1
+    fi
 
-mkdir -p "${CUSTOM_STAGE_DST}/files/opt/pos-printer-bridge/schema"
-install -m 0644 \
-    "${REPO_ROOT}/schema/job.schema.json" \
-    "${CUSTOM_STAGE_DST}/files/opt/pos-printer-bridge/schema/job.schema.json"
+    if [ ! -d "${BRIDGE_SRC}" ]; then
+        echo "Missing bridge directory: ${BRIDGE_SRC}" >&2
+        exit 1
+    fi
 
-pushd "${PIGEN_DIR}" >/dev/null
-./build-docker.sh "$@"
-popd >/dev/null
+    mkdir -p "${WORK_DIR}"
 
-echo "Image build finished. Output is in: ${PIGEN_DIR}/deploy"
+    ensure_checkout
+    write_generated_config
+    sync_custom_stage
+
+    log "Starting pi-gen build"
+    pushd "${PIGEN_DIR}" >/dev/null
+    ./build-docker.sh "$@"
+    popd >/dev/null
+
+    log "Image build finished. Output is in: ${PIGEN_DIR}/deploy"
+}
+
+main "$@"

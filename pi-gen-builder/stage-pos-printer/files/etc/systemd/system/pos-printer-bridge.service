@@ -1,7 +1,7 @@
 [Unit]
 Description=POS Printer Bridge
-After=network-online.target redis-server.service
-Wants=network-online.target redis-server.service
+After=pos-printer-setup-apply.service network-online.target redis-server.service
+Wants=pos-printer-setup-apply.service network-online.target redis-server.service
 
 [Service]
 Type=simple

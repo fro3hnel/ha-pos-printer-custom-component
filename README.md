@@ -247,8 +247,10 @@ Important: the git tag created by the script intentionally matches the plain ver
 
 ## Minimal Raspberry Pi Zero W Image Build
 
-The repository also contains `pi-gen-builder/` for building a minimal Raspberry Pi OS Lite image with the bridge preinstalled:
+The repository also contains `pi-gen-builder/` for building a Raspberry Pi OS Lite image with the bridge and a local onboarding portal preinstalled:
 
 ```bash
 ./pi-gen-builder/build.sh
 ```
+
+On first boot, the image exposes a setup access point if no Wi-Fi is configured yet. The captive-portal-style setup page is then reachable at `http://10.42.0.1/` and can be used to store WLAN credentials and the printer bridge settings.

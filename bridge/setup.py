@@ -20,10 +20,18 @@ setup(
     name="hass-pos-printer-bridge",
     version=BRIDGE_VERSION,
     description="Home-Assistant POS-Printer Bridge for Bixolon printers",
-    author="Your Name",
-    author_email="you@example.com",
+    author="Nico Froehnel",
     python_requires=">=3.8",
-    py_modules=["printer_bridge", "bridge_version"],
+    py_modules=[
+        "printer_bridge",
+        "bridge_version",
+        "device_setup_apply",
+        "device_setup_models",
+        "device_setup_network",
+        "device_setup_portal",
+        "device_setup_service",
+        "device_setup_store",
+    ],
     install_requires=[
         "paho-mqtt",
         "redis",
@@ -34,6 +42,8 @@ setup(
     entry_points={
         "console_scripts": [
             "printer-bridge=printer_bridge:main",
+            "printer-setup-apply=device_setup_apply:main",
+            "printer-setup-portal=device_setup_portal:main",
         ],
     },
     classifiers=[

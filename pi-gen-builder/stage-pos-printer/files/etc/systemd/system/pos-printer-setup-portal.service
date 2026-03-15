@@ -1,0 +1,15 @@
+[Unit]
+Description=POS Printer setup portal
+After=pos-printer-setup-apply.service network.target
+Wants=pos-printer-setup-apply.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pos-printer-bridge
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/pos-printer-bridge/device_setup_portal.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

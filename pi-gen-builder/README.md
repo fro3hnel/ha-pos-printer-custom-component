@@ -1,13 +1,15 @@
 # pi-gen Builder for Raspberry Pi Zero W
 
-This component builds a minimal Raspberry Pi OS image for a Raspberry Pi Zero W using [pi-gen](https://github.com/RPi-Distro/pi-gen) in Docker.
+This component builds a Raspberry Pi OS Lite image for a Raspberry Pi Zero W using [pi-gen](https://github.com/RPi-Distro/pi-gen) in Docker.
 
 The image includes:
 
 - Raspberry Pi OS Lite base (`stage0 stage1 stage2`)
 - A custom `stage-pos-printer` stage
-- Minimal runtime dependencies for the bridge
-- `pos-printer-bridge.service` (enabled on boot)
+- All Python/runtime dependencies required by the bridge
+- A local setup portal on port `80`
+- Automatic AP fallback when no working Wi-Fi configuration is stored
+- `pos-printer-bridge.service` plus provisioning units enabled on boot
 
 ## Prerequisites
 
@@ -42,23 +44,34 @@ Output images are written to:
 ./pi-gen-builder/.work/pi-gen/deploy/
 ```
 
-## Bridge configuration on target device
+## First boot flow
 
-The image ships with `/etc/default/pos-printer-bridge`. Update it after first boot:
+When no Wi-Fi credentials are configured, the image starts an open setup access point:
 
-- `MQTT_BROKER`
-- `MQTT_USERNAME`
-- `MQTT_PASSWORD`
-- `PRINTER_NAME`
-- `PRINTER_PORT`
+- SSID: `POS-Printer-Setup-<hostname suffix>`
+- Portal URL: `http://10.42.0.1/`
 
-Then restart:
+The portal lets you:
 
-```bash
-sudo systemctl restart pos-printer-bridge.service
-```
+- scan and save local Wi-Fi credentials
+- configure the printer bridge MQTT/printer settings
+- switch back to AP mode by clearing the Wi-Fi configuration
+
+Saved settings are written to:
+
+- `/etc/pos-printer-setup/config.json`
+- `/etc/default/pos-printer-bridge`
+
+Relevant services:
+
+- `pos-printer-setup-apply.service`
+- `pos-printer-setup-portal.service`
+- `pos-printer-setup-dnsmasq.service`
+- `pos-printer-bridge.service`
 
 ## Notes
 
+- `build.sh` updates the local `pi-gen` checkout to the requested ref before each build.
+- The image stays on Raspberry Pi OS `bookworm` in `pi-gen-builder/config` for bridge compatibility, while the builder itself tracks current `pi-gen`.
 - The Bixolon runtime library `libBxlPosAPI.so.1` must be available on the target device.
-- The build copies `bridge/printer_bridge.py` (plus schema) into `/opt/pos-printer-bridge`.
+- The build copies the bridge runtime, the setup portal and the schema into `/opt/pos-printer-bridge`.

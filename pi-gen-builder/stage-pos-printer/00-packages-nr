@@ -1,7 +1,9 @@
-python3-paho-mqtt
-python3-redis
+dnsmasq-base
+libbluetooth3
+network-manager
 python3-dotenv
+python3-paho-mqtt
 python3-pil
 python3-psutil
+python3-redis
 redis-server
-libbluetooth3

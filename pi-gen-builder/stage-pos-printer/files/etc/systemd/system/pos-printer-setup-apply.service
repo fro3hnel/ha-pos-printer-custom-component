@@ -1,0 +1,13 @@
+[Unit]
+Description=Apply POS Printer setup networking
+After=NetworkManager.service
+Wants=NetworkManager.service
+Before=network-online.target pos-printer-bridge.service pos-printer-setup-portal.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/pos-printer-bridge/device_setup_apply.py
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
