@@ -1,7 +1,7 @@
 {
   "domain": "pos_printer",
   "name": "POS-Printer Bridge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "documentation": "https://github.com/fro3hnel/ha-pos-printer-custom-component",
   "requirements": ["Pillow>=10.4.0"],
   "dependencies": ["mqtt"],

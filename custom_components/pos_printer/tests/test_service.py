@@ -5,10 +5,18 @@ import logging
 from types import SimpleNamespace
 
 import pytest
+import yaml
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.service import _SERVICES_SCHEMA
 
 from custom_components.pos_printer.const import DOMAIN
-from custom_components.pos_printer.printer import setup_print_service, unload_print_service
+from custom_components.pos_printer.printer import (
+    SERVICE_PRINT_IMAGE_SCHEMA,
+    SERVICE_PRINT_SCHEMA,
+    SERVICE_PRINT_TEXT_SCHEMA,
+    setup_print_service,
+    unload_print_service,
+)
 
 
 class FakeBus:
@@ -519,3 +527,35 @@ async def test_unload_print_service_removes_services_when_last_printer_removed()
     await unload_print_service(hass, {"printer_name": "two"})
     assert (DOMAIN, "print") in hass.services._services
     assert hass.data[DOMAIN].printers == {}
+
+
+def test_service_schemas_accept_string_values_from_selectors():
+    """Service schemas should coerce selector values coming from the UI."""
+    assert SERVICE_PRINT_SCHEMA({"paper_width": "53"})["paper_width"] == 53
+    assert SERVICE_PRINT_SCHEMA({"image_rotation": "90"})["image_rotation"] == 90
+    assert SERVICE_PRINT_TEXT_SCHEMA({"paper_width": "80"})["paper_width"] == 80
+    assert SERVICE_PRINT_IMAGE_SCHEMA({"paper_width": "53"})["paper_width"] == 53
+    assert SERVICE_PRINT_IMAGE_SCHEMA({"image_rotation": "180"})["image_rotation"] == 180
+
+
+def test_services_yaml_matches_home_assistant_service_schema():
+    """The service description file should stay valid for the Actions UI."""
+    with open(
+        "custom_components/pos_printer/services.yaml", "r", encoding="utf-8"
+    ) as file:
+        service_descriptions = yaml.safe_load(file)
+
+    validated = _SERVICES_SCHEMA(service_descriptions)
+
+    assert (
+        validated["print"]["fields"]["paper_width"]["selector"]["select"]["options"][0][
+            "value"
+        ]
+        == "53"
+    )
+    assert (
+        validated["print_image"]["fields"]["image_rotation"]["selector"]["select"][
+            "options"
+        ][1]["value"]
+        == "90"
+    )

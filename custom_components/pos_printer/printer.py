@@ -466,11 +466,17 @@ def _int_range(*, minimum: int, maximum: int | None = None):
     return validator
 
 
+def _int_choice(*options: int):
+    """Return a validator for integer options that also accepts UI strings."""
+    validator = vol.All(vol.Coerce(int), vol.In(options))
+    return validator
+
+
 _COMMON_JOB_FIELDS: dict[Any, Any] = {
     vol.Optional(CONF_PRINTER_NAME): cv.string,
     vol.Optional("job_id"): cv.string,
     vol.Optional("priority"): _int_range(minimum=0, maximum=9),
-    vol.Optional("paper_width"): vol.In([53, 80]),
+    vol.Optional("paper_width"): _int_choice(53, 80),
     vol.Optional("feed_after"): _int_range(minimum=0),
     vol.Optional("expires"): _int_range(minimum=1),
     vol.Optional("timestamp"): vol.Any(cv.string, datetime, date),
@@ -487,7 +493,7 @@ _IMAGE_SOURCE_FIELDS: dict[Any, Any] = {
     vol.Optional("image_threshold"): _int_range(minimum=0, maximum=255),
     vol.Optional("image_dither"): cv.boolean,
     vol.Optional("image_invert"): cv.boolean,
-    vol.Optional("image_rotation"): vol.In(_IMAGE_ROTATIONS),
+    vol.Optional("image_rotation"): _int_choice(*_IMAGE_ROTATIONS),
     vol.Optional("image_fetch_timeout"): _int_range(minimum=1),
     vol.Optional("image_alignment"): vol.In(_ALIGNMENTS),
     vol.Optional("image_nv_key"): _int_range(minimum=0, maximum=255),
