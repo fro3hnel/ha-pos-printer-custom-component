@@ -7,7 +7,7 @@ Wants=pos-printer-setup-apply.service network-online.target redis-server.service
 Type=simple
 User=posprinter
 Group=posprinter
-SupplementaryGroups=plugdev dialout
+SupplementaryGroups=plugdev dialout lp
 WorkingDirectory=/opt/pos-printer-bridge
 EnvironmentFile=/etc/default/pos-printer-bridge
 Environment=PYTHONUNBUFFERED=1

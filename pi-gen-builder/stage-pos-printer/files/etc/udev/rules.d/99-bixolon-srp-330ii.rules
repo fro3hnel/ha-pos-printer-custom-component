@@ -1,1 +1,2 @@
 SUBSYSTEM=="usb", ATTR{idVendor}=="1504", ATTR{idProduct}=="006e", MODE="0660", GROUP="plugdev"
+KERNEL=="lp[0-9]*", SUBSYSTEM=="usb", ATTRS{idVendor}=="1504", ATTRS{idProduct}=="006e", MODE="0660", GROUP="lp"

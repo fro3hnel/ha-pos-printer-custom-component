@@ -44,11 +44,12 @@ sudo ./bridge/install.sh
 The installer:
 
 - creates the `posprinter` system user
+- adds `posprinter` to `plugdev`, `dialout` and `lp`
 - installs the runtime packages used by the `pi-gen` image
 - copies the bridge runtime into `/opt/pos-printer-bridge`
 - installs `pos-printer-bridge.service`
 - creates `/etc/default/pos-printer-bridge` from the same defaults as the image
-- installs a udev rule for `1504:006e` so the SRP-330II is accessible via `plugdev`
+- installs udev rules for `1504:006e` on both the raw USB device and `/dev/usb/lp*`
 - removes the legacy `pos-printer.service` if it exists
 
 ## Configure

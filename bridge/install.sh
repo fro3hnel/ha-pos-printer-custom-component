@@ -50,6 +50,7 @@ ensure_user() {
 
     getent group plugdev >/dev/null 2>&1 && sudo usermod -a -G plugdev "${SERVICE_USER}" || true
     getent group dialout >/dev/null 2>&1 && sudo usermod -a -G dialout "${SERVICE_USER}" || true
+    getent group lp >/dev/null 2>&1 && sudo usermod -a -G lp "${SERVICE_USER}" || true
 }
 
 install_packages() {
@@ -125,7 +126,7 @@ Wants=network-online.target redis-server.service
 Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_GROUP}
-SupplementaryGroups=plugdev dialout
+SupplementaryGroups=plugdev dialout lp
 WorkingDirectory=${TARGET_DIR}
 EnvironmentFile=${ENV_FILE}
 Environment=PYTHONUNBUFFERED=1
