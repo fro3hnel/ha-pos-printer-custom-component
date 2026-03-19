@@ -10,6 +10,7 @@ The image includes:
 - A local setup portal on port `80`
 - Automatic AP fallback when no working Wi-Fi configuration is stored
 - `pos-printer-bridge.service` plus provisioning units enabled on boot
+- A udev rule for the Bixolon SRP-330II (`1504:006e`) that grants `plugdev` access
 
 ## Prerequisites
 

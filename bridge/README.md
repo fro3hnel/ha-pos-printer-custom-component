@@ -8,6 +8,7 @@ The manual install path is aligned with the `pi-gen` image:
 - the systemd unit is `pos-printer-bridge.service`
 - service configuration is stored in `/etc/default/pos-printer-bridge`
 - `/opt/pos-printer-bridge/.env` is kept as a mirror for manual runs
+- the Bixolon SRP-330II USB rule is installed as `/etc/udev/rules.d/99-bixolon-srp-330ii.rules`
 
 ## Features
 
@@ -47,6 +48,7 @@ The installer:
 - copies the bridge runtime into `/opt/pos-printer-bridge`
 - installs `pos-printer-bridge.service`
 - creates `/etc/default/pos-printer-bridge` from the same defaults as the image
+- installs a udev rule for `1504:006e` so the SRP-330II is accessible via `plugdev`
 - removes the legacy `pos-printer.service` if it exists
 
 ## Configure
@@ -99,6 +101,7 @@ Useful flags:
 ```bash
 sudo /opt/pos-printer-bridge/uninstall.sh --keep-config
 sudo /opt/pos-printer-bridge/uninstall.sh --keep-user
+sudo /opt/pos-printer-bridge/uninstall.sh --keep-udev
 sudo /opt/pos-printer-bridge/uninstall.sh --yes
 ```
 

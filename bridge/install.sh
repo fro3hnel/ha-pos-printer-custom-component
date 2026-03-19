@@ -7,12 +7,14 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BRIDGE_SRC="${SCRIPT_DIR}"
 SCHEMA_SRC="${REPO_ROOT}/schema/job.schema.json"
 DEFAULT_ENV_TEMPLATE="${REPO_ROOT}/pi-gen-builder/stage-pos-printer/files/etc/default/pos-printer-bridge"
+UDEV_RULE_TEMPLATE="${REPO_ROOT}/pi-gen-builder/stage-pos-printer/files/etc/udev/rules.d/99-bixolon-srp-330ii.rules"
 
 SERVICE_NAME="pos-printer-bridge.service"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
 LEGACY_SERVICE_NAME="pos-printer.service"
 LEGACY_SERVICE_FILE="/etc/systemd/system/${LEGACY_SERVICE_NAME}"
 ENV_FILE="/etc/default/pos-printer-bridge"
+UDEV_RULE_FILE="/etc/udev/rules.d/99-bixolon-srp-330ii.rules"
 SERVICE_USER="posprinter"
 SERVICE_GROUP="posprinter"
 
@@ -62,7 +64,8 @@ install_packages() {
         python3-psutil \
         python3-redis \
         redis-server \
-        rsync
+        rsync \
+        udev
 }
 
 sync_runtime() {
@@ -92,6 +95,13 @@ write_default_config() {
 
     sudo install -m 0640 "${ENV_FILE}" "${TARGET_DIR}/.env"
     sudo chown root:"${SERVICE_GROUP}" "${TARGET_DIR}/.env"
+}
+
+install_udev_rule() {
+    log "Installing Bixolon USB udev rule to ${UDEV_RULE_FILE}"
+    sudo install -D -m 0644 "${UDEV_RULE_TEMPLATE}" "${UDEV_RULE_FILE}"
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --attr-match=idVendor=1504 --attr-match=idProduct=006e || true
 }
 
 remove_legacy_service() {
@@ -152,6 +162,7 @@ main() {
     require_file "${BRIDGE_SRC}/uninstall.sh"
     require_file "${SCHEMA_SRC}"
     require_file "${DEFAULT_ENV_TEMPLATE}"
+    require_file "${UDEV_RULE_TEMPLATE}"
 
     log "Installing POS Printer Bridge into ${TARGET_DIR}"
     install_packages
@@ -159,6 +170,7 @@ main() {
     ensure_user
     sync_runtime
     write_default_config
+    install_udev_rule
     remove_legacy_service
     prompt_configure
     write_service_file
