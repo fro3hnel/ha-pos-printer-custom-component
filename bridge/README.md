@@ -1,64 +1,77 @@
-# POS‑Printer Bridge for Home Assistant
+# POS-Printer Bridge for Home Assistant
 
-Python service for Raspberry Pi Zero W that consumes MQTT print jobs, buffers them in a **Redis priority queue** and prints them on a **Bixolon POS printer** via the native C‑SDK. Designed to integrate seamlessly with **Home Assistant** via MQTT Discovery.
+Python service for Raspberry Pi Zero W that consumes MQTT print jobs, buffers them in Redis and prints them on a Bixolon POS printer via the native C SDK.
 
----
+The manual install path is aligned with the `pi-gen` image:
+
+- runtime files live in `/opt/pos-printer-bridge`
+- the systemd unit is `pos-printer-bridge.service`
+- service configuration is stored in `/etc/default/pos-printer-bridge`
+- `/opt/pos-printer-bridge/.env` is kept as a mirror for manual runs
 
 ## Features
 
-| Area               | Details                                                                     |
-| ------------------ | --------------------------------------------------------------------------- |
-| **MQTT Topics**    | `pos/print` (jobs) → `pos/print/status` (ack + heartbeat)                   |
-| **Priority Spool** | Single Redis *sorted‑set*; priorities 0–9, FIFO within same priority        |
-| **Paper Width**    | 80 mm default, 53 mm per‑job override                                       |
-| **JSON Schema**    | Strict validation, one‑of section for `text` / `barcode` / `image` elements |
-| **Heart‑Beat**     | Printer + Pi status every *n* seconds (configurable)                        |
-| **HA Discovery**   | Queue length + printer status sensors auto‑created                          |
-| **Threading**      | Independent threads: MQTT client • Worker • Heart‑beat                      |
-| **UTF‑8**          | `SetTextEncoding(ENCODING_ASCII)` for raw UTF‑8 passthrough                 |
-
----
+- MQTT print jobs with ACK and heartbeat topics
+- Redis-backed priority spool
+- 53 mm and 80 mm paper width support
+- Home Assistant discovery payloads for queue and status sensors
+- Bixolon USB, Bluetooth and LAN port strings via the vendor SDK
 
 ## Hardware
 
-* **Host**: Raspberry Pi Zero W (32‑bit Raspbian Bookworm/Ubuntu)
-* **Printer**: Any Bixolon POS model with libBxlPosAPI (USB, BT, LAN)
-* **Width**: 53 mm or 80 mm
+- Host: Raspberry Pi Zero W or similar Linux system
+- Printer: Bixolon POS printer with `libBxlPosAPI.so.1`
+- Width: 53 mm or 80 mm
 
----
+## Manual Install
 
-## Quick‑Start
-
-### Prerequisites
+Prerequisites:
 
 ```bash
-sudo apt update && sudo apt install -y python3 python3-venv python3-dev \
-     redis-server gcc build-essential libbluetooth3 libssl-dev
-
-# Bixolon SDK headers / .so must be in /usr/lib/libBxlPosAPI.so.1
+# The Bixolon SDK shared library must already be present.
+ls /usr/lib/libBxlPosAPI.so.1
 ```
 
-### Clone & Install
+Install from the repository root:
 
 ```bash
-git clone https://github.com/fro3hnel/hass-pos-printer-bridge.git
-cd hass-pos-printer-bridge
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/fro3hnel/ha-pos-printer-custom-component.git
+cd ha-pos-printer-custom-component
+sudo ./bridge/install.sh
 ```
 
-### Configure
+The installer:
 
-Create `.env` in project root:
+- creates the `posprinter` system user
+- installs the runtime packages used by the `pi-gen` image
+- copies the bridge runtime into `/opt/pos-printer-bridge`
+- installs `pos-printer-bridge.service`
+- creates `/etc/default/pos-printer-bridge` from the same defaults as the image
+- removes the legacy `pos-printer.service` if it exists
+
+## Configure
+
+Run the interactive configurator after install or whenever the environment changes:
+
+```bash
+sudo /opt/pos-printer-bridge/configure.sh
+```
+
+It writes:
+
+- `/etc/default/pos-printer-bridge` for systemd
+- `/opt/pos-printer-bridge/.env` as a matching mirror for manual starts
+
+Default variables:
 
 ```ini
-MQTT_BROKER=<IP>
+MQTT_BROKER=127.0.0.1
 MQTT_PORT=1883
-MQTT_USERNAME=mqttuser
-MQTT_PASSWORD=secret
-REDIS_URL=redis://:redispass@<IP>:6379/0
+MQTT_USERNAME=
+MQTT_PASSWORD=
+REDIS_URL=redis://localhost:6379/0
 PRINTER_PORT=USB:
-PRINTER_NAME=<Printer Name>
+PRINTER_NAME=pos_printer
 LOG_LEVEL=INFO
 HEARTBEAT_INTERVAL=60
 LEFT_MARGIN=0
@@ -66,52 +79,54 @@ DEFAULT_WIDTH=80
 IMAGE_FETCH_TIMEOUT=10
 ```
 
-Optional printer defaults (left margin, width) can be set here as well.
-
-### Run
+Check the service after configuration:
 
 ```bash
-python printer_bridge.py
+sudo systemctl status pos-printer-bridge.service
+sudo journalctl -u pos-printer-bridge.service -f
 ```
 
-The service connects to MQTT, publishes Home‑Assistant discovery topics and waits for jobs.
+## Uninstall
 
----
-
-## Systemd Service (recommended)
-
-```ini
-[Unit]
-Description=POS Printer Bridge
-After=network-online.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/opt/pos-printer-bridge
-Environment="PYTHONUNBUFFERED=1"
-ExecStart=/opt/pos-printer-bridge/.venv/bin/python printer_bridge.py
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable with:
+Remove the manual installation with:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now pos-printer.service
+sudo /opt/pos-printer-bridge/uninstall.sh
 ```
 
----
+Useful flags:
+
+```bash
+sudo /opt/pos-printer-bridge/uninstall.sh --keep-config
+sudo /opt/pos-printer-bridge/uninstall.sh --keep-user
+sudo /opt/pos-printer-bridge/uninstall.sh --yes
+```
+
+The uninstall script removes the bridge service, runtime files and optionally the configuration plus service user. Installed OS packages are left untouched.
+
+## Manual Run
+
+For local debugging from the installed runtime:
+
+```bash
+cd /opt/pos-printer-bridge
+sudo -u posprinter /usr/bin/python3 printer_bridge.py
+```
+
+For local development from the repository checkout, create `bridge/.env` manually or copy the installed configuration:
+
+```bash
+cp /etc/default/pos-printer-bridge bridge/.env
+python3 bridge/printer_bridge.py
+```
 
 ## MQTT Topics
 
-* **Publish** a job → `pos/print`
-* **Subscribe** for acknowledgements → `pos/print/status`
+- Publish a job to `print/pos/<printer_name>/job`
+- Subscribe for acknowledgements on `print/pos/<printer_name>/ack`
+- Subscribe for bridge logs on `print/pos/<printer_name>/log`
 
-### Example Job (Weather‑Report)
+Example job:
 
 ```json
 {
@@ -119,56 +134,21 @@ sudo systemctl enable --now pos-printer.service
   "priority": 5,
   "paper_width": 80,
   "message": [
-    {"type": "text", "alignment": "center", "content": "Weather report", "bold": true},
-    {"type": "text", "alignment": "center", "content": "15.07.2025", "underline": true},
-    {"type": "text", "alignment": "left", "content": "15.07: cloudy, 25°C/14°C"},
-    {"type": "barcode", "barcode_type": "qr-code", "content": "https://wetter.de/city"}
+    {"type": "text", "alignment": "center", "content": "Weather report"},
+    {"type": "text", "alignment": "left", "content": "15.07: cloudy, 25C/14C"},
+    {"type": "barcode", "barcode_type": "qr-code", "content": "https://example.invalid"}
   ]
 }
 ```
 
-### ACK / Heartbeat Payload
-
-```json
-{
-  "job_id": "weather-20250715",
-  "status": "success",
-  "detail": "",
-  "queue_len": 0,
-  "printer_status": 0,
-  "timestamp": 1752557352
-}
-```
-
----
-
-## JSON‑Schema
-
-Schema file: [`job.schema.json`](job.schema.json)
-
-Validation from Python:
-
-```python
-import json, jsonschema
-from job_schema import SCHEMA  # load as dict
-jsonschema.validate(payload, SCHEMA)
-```
-
----
-
 ## Development
 
-* Formatting: `black`, `isort`
-* Tests: `pytest` (+ `pytest-mqtt` mocks)
-* Linting: `ruff` / `mypy`
+Run tests from the repository root:
 
 ```bash
-pip install -r dev-requirements.txt
-pytest -q
+pytest
 ```
-
----
 
 ## License
 
-MIT License – see `LICENSE` file.
+MIT License. See `LICENSE`.
