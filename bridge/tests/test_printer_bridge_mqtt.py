@@ -51,6 +51,7 @@ class FakeSpool:
     def __init__(self) -> None:
         self.jobs = []
         self._accepted_job_ids: set[str] = set()
+        self.last_job_payload = None
 
     def push(self, payload, priority):
         if payload["job_id"] in self._accepted_job_ids:
@@ -68,6 +69,12 @@ class FakeSpool:
     def record_success(self):
         return 1
 
+    def record_last_job(self, payload):
+        self.last_job_payload = payload
+
+    def last_job(self):
+        return self.last_job_payload
+
 
 def test_bridge_uses_lwt_and_cleans_legacy_discovery(monkeypatch):
     """The bridge should publish one native integration device without MQTT duplicates."""
@@ -81,6 +88,18 @@ def test_bridge_uses_lwt_and_cleans_legacy_discovery(monkeypatch):
     published = {topic: (payload, qos, retain) for topic, payload, qos, retain in client.published}
 
     assert published[bridge.AVAILABILITY_TOPIC] == ("online", 1, True)
+    status_payload = json.loads(published[bridge.STATUS_TOPIC][0])
+    assert status_payload["schema_version"] == 1
+    assert status_payload["printer_name"] == printer_bridge.CFG.printer_name
+    assert status_payload["bridge_version"] == printer_bridge.BRIDGE_VERSION
+    assert status_payload["online"] is True
+    assert isinstance(status_payload["timestamp"], int)
+    assert status_payload["heartbeat_interval"] == printer_bridge.CFG.heartbeat_interval
+    assert status_payload["queue_length"] == 0
+    assert status_payload["printer_status"] == 0
+    assert status_payload["successful_jobs"] == 0
+    assert status_payload["last_job"] is None
+    assert published[bridge.STATUS_TOPIC][1:] == (1, True)
     discovery_payload = json.loads(published[bridge.DISCOVERY_TOPIC][0])
     assert discovery_payload["printer_name"] == printer_bridge.CFG.printer_name
     assert published["pos_printer/discovery"] == ("", 1, True)
@@ -89,6 +108,10 @@ def test_bridge_uses_lwt_and_cleans_legacy_discovery(monkeypatch):
             f"homeassistant/sensor/{printer_bridge.CFG.printer_name}/queue/config"
         ]
         == ("", 1, True)
+    )
+    assert not any(
+        topic.startswith("homeassistant/") and payload
+        for topic, payload, _qos, _retain in client.published
     )
 
 
@@ -112,10 +135,26 @@ def test_received_job_is_queued_and_acknowledged(monkeypatch):
 
     assert spool.jobs[0][1] == 3
     assert "_queued_at" in spool.jobs[0][0]
-    ack = json.loads(client.published[-1][1])
+    ack = next(
+        json.loads(payload)
+        for topic, payload, _qos, _retain in client.published
+        if topic == bridge.PUB_TOPIC
+    )
     assert ack["job_id"] == "job-1"
     assert ack["status"] == "queued"
     assert ack["duplicate"] is False
+    status = json.loads(client.published[-1][1])
+    assert client.published[-1][0] == bridge.STATUS_TOPIC
+    assert client.published[-1][3] is True
+    assert status["queue_length"] == 1
+    assert status["last_job"] == {
+        "id": "job-1",
+        "status": "queued",
+        "detail": "",
+        "duplicate": False,
+        "timestamp": ack["timestamp"],
+    }
+    assert spool.last_job_payload == status["last_job"]
 
 
 def test_duplicate_job_is_not_queued_or_printed(monkeypatch):

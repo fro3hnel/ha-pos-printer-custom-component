@@ -99,6 +99,7 @@ LOGGER = logging.getLogger("printer_bridge")
 
 JOB_ID_DEDUPLICATION_TTL = 24 * 60 * 60
 MAX_JOB_ID_LENGTH = 128
+STATUS_SCHEMA_VERSION = 1
 
 
 def _decode_data_uri(content: str) -> bytes:
@@ -237,6 +238,25 @@ class RedisSpool:
             f"print_stats:{self.printer_name}:successful_jobs"
         )
         return int(value or 0)
+
+    def record_last_job(self, job: dict[str, Any]) -> None:
+        """Persist the latest lifecycle result for status restoration."""
+        self.redis.set(
+            f"print_stats:{self.printer_name}:last_job",
+            json.dumps(job),
+        )
+
+    def last_job(self) -> dict[str, Any] | None:
+        """Return the persisted latest lifecycle result, if it is valid."""
+        raw_job = self.redis.get(f"print_stats:{self.printer_name}:last_job")
+        if not raw_job:
+            return None
+        try:
+            job = json.loads(raw_job)
+        except (TypeError, json.JSONDecodeError):
+            LOGGER.warning("Ignoring invalid persisted last-job status")
+            return None
+        return job if isinstance(job, dict) else None
 
 
 def _job_is_expired(job: dict[str, Any], now: float | None = None) -> bool:
@@ -491,6 +511,7 @@ class BixolonPrinter:
 class MQTTBridge:
     SUB_TOPIC = f"print/pos/{CFG.printer_name}/job"
     PUB_TOPIC = f"print/pos/{CFG.printer_name}/ack"
+    STATUS_TOPIC = f"print/pos/{CFG.printer_name}/status"
     LOG_TOPIC = f"print/pos/{CFG.printer_name}/log"
     AVAILABILITY_TOPIC = f"print/pos/{CFG.printer_name}/availability"
     DISCOVERY_TOPIC = f"pos_printer/discovery/{CFG.printer_name}"
@@ -510,6 +531,9 @@ class MQTTBridge:
         self.client.on_message = self._on_message
         self.client.message_callback_add(self.RESTART_TOPIC, self._on_restart)
         self._stop = threading.Event()
+        self._state_lock = threading.Lock()
+        last_job_getter = getattr(self.spool, "last_job", None)
+        self._last_job = last_job_getter() if callable(last_job_getter) else None
         self._log_handler = MQTTLogHandler(self.client, self.LOG_TOPIC, CFG.printer_name)
         self._log_handler.setLevel(getattr(logging, CFG.log_level.upper(), logging.INFO))
         LOGGER.addHandler(self._log_handler)
@@ -523,6 +547,7 @@ class MQTTBridge:
 
     def stop(self):
         self._stop.set()
+        self._publish_status(online=False)
         publish_info = self.client.publish(
             self.AVAILABILITY_TOPIC,
             payload="offline",
@@ -549,6 +574,7 @@ class MQTTBridge:
                 retain=True,
             )
             self._publish_bridge_announcement()
+            self._publish_status()
             self._remove_legacy_discovery()
             LOGGER.info(
                 "MQTT connected; subscribed to %s and %s",
@@ -624,7 +650,7 @@ class MQTTBridge:
     def _heartbeat_loop(self):
         while not self._stop.is_set():
             self._publish_bridge_announcement()
-            self._publish_heartbeat()
+            self._publish_status()
             time.sleep(CFG.heartbeat_interval)
 
     # ---------------- helpers ----------------
@@ -636,6 +662,24 @@ class MQTTBridge:
         *,
         duplicate: bool = False,
     ):
+        timestamp = int(time.time())
+        last_job = {
+            "id": job_id,
+            "status": status,
+            "detail": detail,
+            "duplicate": duplicate,
+            "timestamp": timestamp,
+        }
+        with self._state_lock:
+            self._last_job = last_job
+
+        record_last_job = getattr(self.spool, "record_last_job", None)
+        if callable(record_last_job):
+            try:
+                record_last_job(last_job)
+            except Exception:  # noqa: BLE001
+                LOGGER.exception("Could not persist last-job status")
+
         payload = {
             "job_id": job_id,
             "status": status,
@@ -644,27 +688,57 @@ class MQTTBridge:
             "queue_len": self.spool.length(),
             "printer_status": self.printer.get_status(),
             "successful_jobs": self.spool.successful_jobs(),
-            "timestamp": int(time.time()),
+            "timestamp": timestamp,
         }
         self.client.publish(self.PUB_TOPIC, json.dumps(payload), qos=1)
+        self._publish_status(timestamp=timestamp)
 
-    def _publish_heartbeat(self):
-        info: Dict[str, Any] = {
-            "timestamp": int(time.time()),
-            "queue_len": self.spool.length(),
+    def _publish_status(
+        self,
+        *,
+        online: bool = True,
+        timestamp: int | None = None,
+    ) -> None:
+        """Publish the retained, versioned bridge-status snapshot."""
+        with self._state_lock:
+            last_job = dict(self._last_job) if self._last_job is not None else None
+
+        payload: Dict[str, Any] = {
+            "schema_version": STATUS_SCHEMA_VERSION,
+            "printer_name": CFG.printer_name,
+            "bridge_version": BRIDGE_VERSION,
+            "online": online,
+            "timestamp": timestamp if timestamp is not None else int(time.time()),
+            "heartbeat_interval": CFG.heartbeat_interval,
+            "queue_length": self.spool.length(),
             "printer_status": self.printer.get_status(),
             "successful_jobs": self.spool.successful_jobs(),
-            "version": BRIDGE_VERSION,
+            "last_job": last_job,
         }
         if psutil:
-            temperatures = psutil.sensors_temperatures()
-            info.update({
-                "cpu_temp": temperatures["cpu-thermal"][0].current  # type: ignore[index]
-                if "cpu-thermal" in temperatures else None,
-                "cpu_percent": psutil.cpu_percent(interval=None),
-                "mem_available": psutil.virtual_memory().available,
-            })
-        self.client.publish(self.PUB_TOPIC, json.dumps({"heartbeat": info}), qos=0, retain=False)
+            try:
+                payload.update(
+                    {
+                        "cpu_percent": psutil.cpu_percent(interval=None),
+                        "mem_available": psutil.virtual_memory().available,
+                    }
+                )
+                get_temperatures = getattr(psutil, "sensors_temperatures", None)
+                if callable(get_temperatures):
+                    temperatures = get_temperatures()
+                    payload["cpu_temp"] = (
+                        temperatures["cpu-thermal"][0].current
+                        if "cpu-thermal" in temperatures
+                        else None
+                    )
+            except Exception:  # noqa: BLE001
+                LOGGER.debug("Could not collect optional host telemetry", exc_info=True)
+        self.client.publish(
+            self.STATUS_TOPIC,
+            json.dumps(payload),
+            qos=1,
+            retain=True,
+        )
 
     def _publish_bridge_announcement(self):
         payload = {
