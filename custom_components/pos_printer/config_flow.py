@@ -6,19 +6,23 @@ import json
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
 
-from .const import CONF_PRINTER_NAME, DOMAIN
-from .validation import is_valid_printer_name, normalize_printer_name
-
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {vol.Required(CONF_PRINTER_NAME, default="kitchen_printer"): str}
+from .const import (
+    CONF_FEED_AFTER,
+    CONF_PAPER_WIDTH,
+    CONF_PRINTER_NAME,
+    DEFAULT_FEED_AFTER,
+    DEFAULT_PAPER_WIDTH,
+    DOMAIN,
 )
+from .validation import is_valid_printer_name, normalize_printer_name
 
 
 class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for POS-Printer Bridge."""
 
-    VERSION = 1
+    VERSION = 3
 
     def _build_schema(self, default_printer_name: str) -> vol.Schema:
         """Build a simple printer-name schema."""
@@ -50,7 +54,7 @@ class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         *,
         ignore_entry_id: str | None = None,
     ) -> dict[str, str]:
-        """Validate a printer name for setup, options, and reconfigure flows."""
+        """Validate a printer name for manual setup."""
         errors: dict[str, str] = {}
         if not printer_name or not is_valid_printer_name(printer_name):
             errors["base"] = "invalid_printer_name"
@@ -58,11 +62,13 @@ class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "already_configured"
         return errors
 
-    async def async_step_mqtt(self, discovery_info: dict) -> config_entries.ConfigFlowResult:
+    async def async_step_mqtt(
+        self, discovery_info: MqttServiceInfo
+    ) -> config_entries.ConfigFlowResult:
         """Handle MQTT discovery."""
         try:
-            data = json.loads(discovery_info["payload"])
-        except json.JSONDecodeError:
+            data = json.loads(discovery_info.payload)
+        except (AttributeError, TypeError, json.JSONDecodeError):
             return self.async_abort(reason="invalid_discovery")
 
         printer_name = normalize_printer_name(str(data.get(CONF_PRINTER_NAME, "")))
@@ -102,91 +108,50 @@ class PosPrinterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reconfigure(
-        self,
-        user_input: dict[str, str] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Handle reconfiguring the printer name."""
-        entry = self._get_reconfigure_entry()
-        current_name = entry.options.get(CONF_PRINTER_NAME, entry.data[CONF_PRINTER_NAME])
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            printer_name = normalize_printer_name(user_input[CONF_PRINTER_NAME])
-            errors = self._validate_printer_name(
-                printer_name,
-                ignore_entry_id=entry.entry_id,
-            )
-            if not errors:
-                await self.async_set_unique_id(printer_name)
-                self._abort_if_unique_id_mismatch()
-                return self.async_update_reload_and_abort(
-                    entry,
-                    unique_id=printer_name,
-                    title=printer_name,
-                    data_updates={CONF_PRINTER_NAME: printer_name},
-                    options={CONF_PRINTER_NAME: printer_name},
-                )
-
-        return self.async_show_form(
-            step_id="reconfigure",
-            data_schema=self._build_schema(current_name),
-            errors=errors,
-        )
-
     @staticmethod
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> "OptionsFlowHandler":
-        """Get the options flow for this handler."""
+        """Return the per-printer print-default options flow."""
         return OptionsFlowHandler(config_entry)
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle an options flow for POS-Printer Bridge."""
+    """Configure per-printer print defaults."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
 
-    def _printer_name_in_use(self, printer_name: str) -> bool:
-        """Check whether another config entry already uses the printer name."""
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            if entry.entry_id == self._config_entry.entry_id:
-                continue
-            current_name = entry.options.get(
-                CONF_PRINTER_NAME,
-                entry.data.get(CONF_PRINTER_NAME),
-            )
-            if current_name == printer_name:
-                return True
-        return False
-
     async def async_step_init(
         self,
-        user_input: dict[str, str] | None = None,
+        user_input: dict[str, int] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Manage integration options."""
-        errors: dict[str, str] = {}
+        """Manage paper width and feed defaults."""
         if user_input is not None:
-            printer_name = normalize_printer_name(user_input[CONF_PRINTER_NAME])
-            if not printer_name or not is_valid_printer_name(printer_name):
-                errors["base"] = "invalid_printer_name"
-            elif self._printer_name_in_use(printer_name):
-                errors["base"] = "already_configured"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={CONF_PRINTER_NAME: printer_name},
-                )
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_PAPER_WIDTH: int(user_input[CONF_PAPER_WIDTH]),
+                    CONF_FEED_AFTER: int(user_input[CONF_FEED_AFTER]),
+                },
+            )
 
-        current_name = self._config_entry.options.get(
-            CONF_PRINTER_NAME,
-            self._config_entry.data.get(CONF_PRINTER_NAME),
-        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
-                {vol.Required(CONF_PRINTER_NAME, default=current_name): str}
+                {
+                    vol.Required(
+                        CONF_PAPER_WIDTH,
+                        default=self._config_entry.options.get(
+                            CONF_PAPER_WIDTH, DEFAULT_PAPER_WIDTH
+                        ),
+                    ): vol.In({53: "53 mm", 80: "80 mm"}),
+                    vol.Required(
+                        CONF_FEED_AFTER,
+                        default=self._config_entry.options.get(
+                            CONF_FEED_AFTER, DEFAULT_FEED_AFTER
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=20)),
+                }
             ),
-            errors=errors,
         )

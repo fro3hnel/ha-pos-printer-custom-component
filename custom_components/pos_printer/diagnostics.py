@@ -17,6 +17,7 @@ _RUNTIME_TO_REDACT = {
     "print",
     "status",
     "log",
+    "availability",
     "job_id",
     "detail",
     "message",
@@ -36,7 +37,10 @@ def _serialize_runtime(runtime: PrinterRuntimeData | None) -> dict[str, Any] | N
             "print": runtime.print_topic,
             "status": runtime.status_topic,
             "log": runtime.log_topic,
+            "availability": runtime.availability_topic,
         },
+        "available": runtime.available,
+        "availability_known": runtime.availability_known,
         "last_status": runtime.last_status,
         "last_log": runtime.last_log,
     }

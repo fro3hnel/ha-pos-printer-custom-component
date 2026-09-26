@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from packaging.version import InvalidVersion, Version
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from packaging.version import InvalidVersion, Version
 
 from .const import CONF_PRINTER_NAME, DOMAIN, VERSION
 from .validation import is_valid_printer_name
@@ -13,10 +13,10 @@ from .validation import is_valid_printer_name
 ISSUE_INVALID_PRINTER_NAME = "invalid_printer_name"
 ISSUE_OUTDATED_BRIDGE_VERSION = "outdated_bridge_version"
 _CONFIGURATION_URL = (
-    "https://github.com/fro3hnel/ha-pos-printer-custom-component#configuration"
+    "https://github.com/fro3hnel/ha-pos-printer-custom-component#home-assistant-setup"
 )
 _TROUBLESHOOTING_URL = (
-    "https://github.com/fro3hnel/ha-pos-printer-custom-component#troubleshooting"
+    "https://github.com/fro3hnel/ha-pos-printer-custom-component#diagnostics-and-repairs"
 )
 
 

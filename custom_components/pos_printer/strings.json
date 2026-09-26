@@ -1,0 +1,112 @@
+{
+  "title": "POS-Printer Bridge",
+  "config": {
+    "abort": {
+      "invalid_discovery": "The MQTT discovery payload is invalid.",
+      "already_configured": "This printer is already configured."
+    },
+    "error": {
+      "invalid_printer_name": "Printer names may only contain lowercase letters, numbers, underscores, and hyphens."
+    },
+    "step": {
+      "user": {
+        "title": "Set up POS-Printer Bridge",
+        "data": {"printer_name": "Printer name"},
+        "data_description": {
+          "printer_name": "MQTT topic identifier published by the bridge; use lowercase letters, numbers, underscores, or hyphens."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "POS printer defaults",
+        "description": "Set defaults used when an action does not specify these values.",
+        "data": {
+          "paper_width": "Paper width",
+          "feed_after": "Feed after"
+        },
+        "data_description": {
+          "paper_width": "Receipt paper width used by this printer.",
+          "feed_after": "Additional line feeds after every print job (0-20)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_job_status": {
+        "name": "Last print job status",
+        "state": {
+          "queued": "Queued",
+          "duplicate": "Duplicate",
+          "printing": "Printing",
+          "success": "Success",
+          "partial-error": "Partial error",
+          "error": "Error",
+          "expired": "Expired"
+        }
+      },
+      "last_job_id": {"name": "Last print job ID"},
+      "last_job_detail": {"name": "Last print job detail"},
+      "last_status_update": {"name": "Last status update"},
+      "queue_length": {"name": "Queue length"},
+      "bridge_version": {"name": "Bridge version"},
+      "last_bridge_log": {"name": "Last bridge log message"},
+      "successful_jobs": {"name": "Successful print jobs"}
+    },
+    "binary_sensor": {
+      "bridge_connected": {"name": "Bridge connection"},
+      "job_error": {"name": "Print job error"}
+    },
+    "button": {
+      "bridge_restart": {"name": "Restart bridge service"}
+    }
+  },
+  "issues": {
+    "invalid_printer_name": {
+      "title": "Printer name should be reconfigured",
+      "description": "The configured printer name `{printer_name}` is not safe for MQTT topics. Change the identifier on the bridge, then remove and add the integration entry again. Use only lowercase letters, numbers, underscores, and hyphens."
+    },
+    "outdated_bridge_version": {
+      "title": "Bridge software is outdated",
+      "description": "The bridge for `{printer_name}` reports version `{bridge_version}`. Update the Raspberry Pi bridge to at least `{minimum_version}` so it matches the installed Home Assistant integration."
+    }
+  },
+  "exceptions": {
+    "invalid_json": {"message": "The {field} field must contain valid JSON."},
+    "invalid_job_id": {"message": "The job ID must be a non-empty string with at most {maximum_length} characters."},
+    "field_must_be_list": {"message": "The {field} field must be a list of elements."},
+    "field_items_must_be_objects": {"message": "The {field} field must contain only objects."},
+    "host_processing_required": {"message": "Enable image processing on Home Assistant when using URLs, files, media sources, or cameras."},
+    "raw_image_content_required": {"message": "Image content is required for raw image passthrough."},
+    "no_printers_configured": {"message": "No POS printers are configured."},
+    "unknown_config_entry": {"message": "The POS printer config entry {config_entry_id} is unknown."},
+    "unknown_printer": {"message": "The printer {printer_name} is unknown."},
+    "printer_target_required": {"message": "Select a POS printer config entry."},
+    "job_must_be_object": {"message": "The job field must be an object."},
+    "no_message_elements": {"message": "Add at least one text, barcode, or image element."},
+    "no_text_content": {"message": "Add printable content to the title, text, or footer."},
+    "image_source_required": {"message": "Select an image source."},
+    "bridge_offline": {"message": "The bridge for {printer_name} is offline."},
+    "image_too_large": {"message": "The image payload exceeds the {maximum_mib} MiB limit."},
+    "data_uri_separator_missing": {"message": "The image data URI is missing its comma separator."},
+    "invalid_data_uri_base64": {"message": "The image data URI contains invalid Base64 data."},
+    "invalid_media_source_selector": {"message": "The media source value is invalid."},
+    "local_media_source_only": {"message": "Only local media-source images are supported."},
+    "media_path_escape": {"message": "The media-source path leaves the media directory."},
+    "local_path_not_allowed": {"message": "Local image paths must stay inside the Home Assistant config, media, or www directory."},
+    "remote_image_empty": {"message": "The remote image returned an empty payload."},
+    "remote_image_fetch_failed": {"message": "The remote image could not be fetched: {error}"},
+    "image_file_not_found": {"message": "The image file was not found: {path}"},
+    "image_file_read_failed": {"message": "The image file could not be read: {error}"},
+    "image_content_empty": {"message": "The image content is empty."},
+    "invalid_image_content": {"message": "Image content must be Base64 data or a valid data URI."},
+    "no_image_source": {"message": "No image source was provided."},
+    "multiple_image_sources": {"message": "Use exactly one image source."},
+    "invalid_image_url_scheme": {"message": "The image URL must use http://, https://, or file://."},
+    "image_dimensions_too_large": {"message": "The image exceeds the {maximum_megapixels} megapixel limit."},
+    "image_processing_failed": {"message": "The selected image could not be loaded or processed."}
+  }
+}

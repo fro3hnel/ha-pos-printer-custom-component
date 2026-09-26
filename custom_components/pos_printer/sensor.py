@@ -3,90 +3,47 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Callable
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_PRINTER_NAME, DOMAIN, EVENT_BRIDGE_LOG, EVENT_STATUS, VERSION
-from .models import PrinterRuntimeData
+from .const import DOMAIN, EVENT_BRIDGE_LOG, EVENT_STATUS
+from .entity import PosPrinterEntity, entry_printer_name, entry_runtime_data
+from .models import PosPrinterConfigEntry, PrinterRuntimeData
 
 PARALLEL_UPDATES = 0
 
 
-class PosPrinterEntity:
-    """Base entity class with shared device metadata."""
-
-    _attr_has_entity_name = True
-    _attr_available = False
-
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        self._printer_name = printer_name
-        self._entry_id = entry_id
-        self._unsub: Callable[[], None] | None = None
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Remove event listeners when the entity leaves Home Assistant."""
-        if self._unsub is not None:
-            self._unsub()
-            self._unsub = None
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return shared device information."""
-        return {
-            "identifiers": {(DOMAIN, self._printer_name)},
-            "name": self._printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS Printer Bridge",
-            "sw_version": VERSION,
-        }
-
-    def _match_event(self, event: Event) -> dict[str, Any] | None:
-        """Return matching event data for this printer entity."""
-        if event.data.get("printer_name") != self._printer_name:
-            return None
-        if not self._attr_available:
-            self._attr_available = True
-        return event.data
-
-    def _write_state_if_ready(self) -> None:
-        """Write state only after the entity has been added to the platform."""
-        if self.entity_id:
-            self.async_write_ha_state()
-
-
-def _entry_printer_name(entry: ConfigEntry) -> str:
-    """Resolve the effective printer name for a config entry."""
-    runtime_data = getattr(entry, "runtime_data", None)
-    if isinstance(runtime_data, PrinterRuntimeData):
-        return runtime_data.printer_name
-    return entry.options.get(CONF_PRINTER_NAME, entry.data[CONF_PRINTER_NAME])
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: PosPrinterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up POS printer sensors for a config entry."""
-    printer_name = _entry_printer_name(entry)
+    printer_name = entry_printer_name(entry)
     entry_id = entry.entry_id
+    runtime_data = entry_runtime_data(entry)
 
     async_add_entities(
         [
-            LastJobStatusSensor(printer_name, entry_id),
-            LastJobIdSensor(printer_name, entry_id),
-            LastJobDetailSensor(printer_name, entry_id),
-            LastStatusTimestampSensor(printer_name, entry_id),
-            QueueLengthSensor(printer_name, entry_id),
-            BridgeVersionSensor(printer_name, entry_id),
-            LastBridgeLogSensor(printer_name, entry_id),
-            SuccessfulJobsCounterSensor(printer_name, entry_id),
+            LastJobStatusSensor(printer_name, entry_id, runtime_data),
+            LastJobIdSensor(printer_name, entry_id, runtime_data),
+            LastJobDetailSensor(printer_name, entry_id, runtime_data),
+            LastStatusTimestampSensor(printer_name, entry_id, runtime_data),
+            QueueLengthSensor(printer_name, entry_id, runtime_data),
+            BridgeVersionSensor(printer_name, entry_id, runtime_data),
+            LastBridgeLogSensor(printer_name, entry_id, runtime_data),
+            SuccessfulJobsCounterSensor(printer_name, entry_id, runtime_data),
         ]
     )
 
@@ -96,11 +53,24 @@ class LastJobStatusSensor(PosPrinterEntity, SensorEntity):
 
     _attr_translation_key = "last_job_status"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:printer-check"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [
+        "queued",
+        "duplicate",
+        "printing",
+        "success",
+        "partial-error",
+        "error",
+        "expired",
+    ]
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Last Job Status"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_last_job_status"
         self._state: str | None = None
 
@@ -109,7 +79,8 @@ class LastJobStatusSensor(PosPrinterEntity, SensorEntity):
         return self._state
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -128,11 +99,16 @@ class LastJobIdSensor(PosPrinterEntity, SensorEntity):
 
     _attr_translation_key = "last_job_id"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:identifier"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Last Job ID"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_last_job_id"
         self._state: str | None = None
 
@@ -141,7 +117,8 @@ class LastJobIdSensor(PosPrinterEntity, SensorEntity):
         return self._state
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -160,13 +137,16 @@ class LastJobDetailSensor(PosPrinterEntity, SensorEntity):
 
     _attr_translation_key = "last_job_detail"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:text-box-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Last Job Detail"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_last_job_detail"
         self._state: str | None = None
 
@@ -175,7 +155,8 @@ class LastJobDetailSensor(PosPrinterEntity, SensorEntity):
         return self._state
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -194,12 +175,17 @@ class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
 
     _attr_translation_key = "last_status_update"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:clock-outline"
-    _attr_device_class = "timestamp"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Last Status Update"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_last_status_update"
         self._timestamp: int | None = None
 
@@ -210,7 +196,8 @@ class LastStatusTimestampSensor(PosPrinterEntity, SensorEntity):
         return datetime.fromtimestamp(self._timestamp, tz=timezone.utc)
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -229,14 +216,17 @@ class QueueLengthSensor(PosPrinterEntity, SensorEntity):
 
     _attr_translation_key = "queue_length"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:format-list-numbered"
     _attr_native_unit_of_measurement = "jobs"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Queue Length"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_queue_length"
         self._value: int | None = None
 
@@ -245,7 +235,8 @@ class QueueLengthSensor(PosPrinterEntity, SensorEntity):
         return self._value
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -264,13 +255,16 @@ class BridgeVersionSensor(PosPrinterEntity, SensorEntity):
 
     _attr_translation_key = "bridge_version"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:tag-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Bridge Version"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_bridge_version"
         self._state: str | None = None
 
@@ -279,7 +273,8 @@ class BridgeVersionSensor(PosPrinterEntity, SensorEntity):
         return self._state
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -297,19 +292,23 @@ class BridgeVersionSensor(PosPrinterEntity, SensorEntity):
 class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
     """Binary sensor that turns on when a print job errors."""
 
-    _attr_device_class = "problem"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "job_error"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:alert-circle"
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Job Error"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_job_error"
         self._attr_is_on = False
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -318,22 +317,9 @@ class JobErrorBinarySensor(PosPrinterEntity, BinarySensorEntity):
             return
 
         status = data.get("status")
-        is_error = status == "error"
-        if is_error and not self._attr_is_on:
-            self.hass.async_create_task(
-                self.hass.services.async_call(
-                    "persistent_notification",
-                    "create",
-                    {
-                        "title": f"{DOMAIN} - Print Job Error",
-                        "message": (
-                            f"Job {data.get('job_id')} failed: "
-                            f"{data.get('detail', '')}"
-                        ),
-                    },
-                )
-            )
-        self._attr_is_on = is_error
+        if status is None:
+            return
+        self._attr_is_on = status in {"error", "partial-error", "expired"}
         self._write_state_if_ready()
 
 
@@ -342,13 +328,16 @@ class LastBridgeLogSensor(PosPrinterEntity, SensorEntity):
 
     _attr_translation_key = "last_bridge_log"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:text-box-search-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Last Bridge Log"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_last_bridge_log"
         self._message: str | None = None
         self._attrs: dict[str, str | int] = {}
@@ -362,7 +351,10 @@ class LastBridgeLogSensor(PosPrinterEntity, SensorEntity):
         return self._attrs
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_BRIDGE_LOG, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(
+            self.hass.bus.async_listen(EVENT_BRIDGE_LOG, self._handle_event)
+        )
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -389,19 +381,22 @@ class LastBridgeLogSensor(PosPrinterEntity, SensorEntity):
 
 
 class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
-    """Sensor counting the number of successful print jobs."""
+    """Sensor exposing the bridge-persisted successful print-job count."""
 
     _attr_translation_key = "successful_jobs"
     _attr_translation_domain = DOMAIN
-    _attr_icon = "mdi:counter"
     _attr_native_unit_of_measurement = "jobs"
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, printer_name: str, entry_id: str) -> None:
-        super().__init__(printer_name, entry_id)
-        self._attr_name = f"{printer_name} Successful Jobs"
+    def __init__(
+        self,
+        printer_name: str,
+        entry_id: str,
+        runtime_data: PrinterRuntimeData | None = None,
+    ) -> None:
+        super().__init__(printer_name, entry_id, runtime_data)
         self._attr_unique_id = f"{entry_id}_successful_jobs"
         self._count = 0
 
@@ -410,7 +405,8 @@ class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
         return self._count
 
     async def async_added_to_hass(self) -> None:
-        self._unsub = self.hass.bus.async_listen(EVENT_STATUS, self._handle_event)
+        await super().async_added_to_hass()
+        self._track_unsub(self.hass.bus.async_listen(EVENT_STATUS, self._handle_event))
 
     @callback
     def _handle_event(self, event: Event) -> None:
@@ -418,6 +414,7 @@ class SuccessfulJobsCounterSensor(PosPrinterEntity, SensorEntity):
         if data is None:
             return
 
-        if data.get("status") == "success":
-            self._count += 1
+        successful_jobs = data.get("successful_jobs")
+        if isinstance(successful_jobs, int):
+            self._count = successful_jobs
             self._write_state_if_ready()

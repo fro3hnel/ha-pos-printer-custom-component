@@ -2,10 +2,17 @@ print:
   name: "Print POS Job"
   description: "Advanced print service for fully custom POS jobs."
   fields:
-    printer_name:
+    config_entry_id:
       name: "Printer"
-      description: "Target printer (required when multiple printers are configured)."
+      description: "Target POS printer config entry."
+      selector:
+        config_entry:
+          integration: pos_printer
+    printer_name:
+      name: "Legacy printer name"
+      description: "Deprecated MQTT identifier kept for existing automations."
       example: "kitchen_printer"
+      advanced: true
       selector:
         text:
     job:
@@ -22,7 +29,7 @@ print:
         object:
     job_id:
       name: "Job ID"
-      description: "Optional job identifier."
+      description: "Optional non-empty identifier, maximum 128 characters. Reuse it only for redelivery of the same intended print; use a new ID for every new physical print."
       example: "abc123"
       advanced: true
       selector:
@@ -39,9 +46,8 @@ print:
           step: 1
     paper_width:
       name: "Paper width"
-      description: "Paper width in mm."
+      description: "Paper width in mm; uses the configured printer default when omitted."
       example: "80"
-      default: "80"
       selector:
         select:
           options:
@@ -51,9 +57,8 @@ print:
               value: "80"
     feed_after:
       name: "Feed after"
-      description: "Additional line feeds after printing."
+      description: "Additional line feeds; uses the configured printer default when omitted."
       example: 4
-      default: 4
       selector:
         number:
           min: 0
@@ -336,9 +341,22 @@ print_text:
   name: "Print text message"
   description: "Dashboard-friendly text printing for short notes, helper text, and automation messages."
   fields:
-    printer_name:
+    config_entry_id:
       name: "Printer"
-      description: "Target printer (required when multiple printers are configured)."
+      description: "Target POS printer config entry."
+      selector:
+        config_entry:
+          integration: pos_printer
+    printer_name:
+      name: "Legacy printer name"
+      description: "Deprecated MQTT identifier kept for existing automations."
+      advanced: true
+      selector:
+        text:
+    job_id:
+      name: "Job ID"
+      description: "Optional non-empty identifier, maximum 128 characters. Reuse it only for redelivery of the same intended print; use a new ID for every new physical print."
+      advanced: true
       selector:
         text:
     title:
@@ -348,8 +366,7 @@ print_text:
         text:
     text:
       name: "Text"
-      description: "Main text to print."
-      required: true
+      description: "Optional main text; provide content in at least one of title, text, or footer."
       selector:
         text:
           multiline: true
@@ -426,8 +443,7 @@ print_text:
           step: 1
     paper_width:
       name: "Paper width"
-      description: "Paper width in mm."
-      default: "80"
+      description: "Paper width in mm; uses the configured printer default when omitted."
       selector:
         select:
           options:
@@ -437,20 +453,144 @@ print_text:
               value: "80"
     feed_after:
       name: "Feed after"
-      description: "Additional line feeds after printing."
-      default: 4
+      description: "Additional line feeds; uses the configured printer default when omitted."
       selector:
         number:
           min: 0
           step: 1
 
+print_pictograms:
+  name: "Print pictograms"
+  description: "Combine child-friendly monochrome pictograms into one offline-rendered receipt image."
+  fields:
+    config_entry_id:
+      name: "Printer"
+      description: "Target POS printer config entry."
+      selector:
+        config_entry:
+          integration: pos_printer
+    printer_name:
+      name: "Legacy printer name"
+      description: "Deprecated MQTT identifier kept for existing automations."
+      advanced: true
+      selector:
+        text:
+    job_id:
+      name: "Job ID"
+      description: "Optional non-empty identifier, maximum 128 characters. Reuse it only for redelivery of the same intended print; use a new ID for every new physical print."
+      advanced: true
+      selector:
+        text:
+    pictograms:
+      name: "Pictograms"
+      description: "Choose 1-12 unique symbols. Their order is preserved on the receipt."
+      required: true
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: "T-shirt"
+              value: "t_shirt"
+            - label: "Long-sleeve shirt"
+              value: "long_sleeve"
+            - label: "Shorts"
+              value: "shorts"
+            - label: "Trousers"
+              value: "trousers"
+            - label: "Sweater"
+              value: "sweater"
+            - label: "Light jacket"
+              value: "light_jacket"
+            - label: "Winter coat"
+              value: "winter_coat"
+            - label: "Raincoat"
+              value: "raincoat"
+            - label: "Beanie"
+              value: "beanie"
+            - label: "Gloves"
+              value: "gloves"
+            - label: "Sneakers"
+              value: "sneakers"
+            - label: "Rain boots"
+              value: "rain_boots"
+            - label: "Winter boots"
+              value: "winter_boots"
+            - label: "Umbrella"
+              value: "umbrella"
+            - label: "Unknown / question mark"
+              value: "unknown"
+    title:
+      name: "Title"
+      description: "Optional large title printed before the pictograms."
+      selector:
+        text:
+    subtitle:
+      name: "Subtitle"
+      description: "Optional centered summary printed between title and pictograms."
+      selector:
+        text:
+          multiline: true
+    priority:
+      name: "Priority"
+      description: "Print priority (0-9, 0 = highest)."
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 9
+          step: 1
+    paper_width:
+      name: "Paper width"
+      description: "Paper width in mm; uses the configured printer default when omitted."
+      selector:
+        select:
+          options:
+            - label: "53 mm"
+              value: "53"
+            - label: "80 mm"
+              value: "80"
+    feed_after:
+      name: "Feed after"
+      description: "Additional line feeds; uses the configured printer default when omitted."
+      selector:
+        number:
+          min: 0
+          step: 1
+    expires:
+      name: "Expires"
+      description: "Optional number of seconds after which a queued job becomes obsolete."
+      advanced: true
+      selector:
+        number:
+          min: 1
+          step: 1
+    timestamp:
+      name: "Timestamp"
+      description: "Optional ISO-8601 job timestamp."
+      advanced: true
+      selector:
+        text:
+
 print_image:
   name: "Print image"
   description: "Image-focused printing with preprocessing on the Home Assistant host."
   fields:
-    printer_name:
+    config_entry_id:
       name: "Printer"
-      description: "Target printer (required when multiple printers are configured)."
+      description: "Target POS printer config entry."
+      selector:
+        config_entry:
+          integration: pos_printer
+    printer_name:
+      name: "Legacy printer name"
+      description: "Deprecated MQTT identifier kept for existing automations."
+      advanced: true
+      selector:
+        text:
+    job_id:
+      name: "Job ID"
+      description: "Optional non-empty identifier, maximum 128 characters. Reuse it only for redelivery of the same intended print; use a new ID for every new physical print."
+      advanced: true
       selector:
         text:
     title:
@@ -603,8 +743,7 @@ print_image:
           step: 1
     paper_width:
       name: "Paper width"
-      description: "Paper width in mm."
-      default: "80"
+      description: "Paper width in mm; uses the configured printer default when omitted."
       selector:
         select:
           options:
@@ -614,8 +753,7 @@ print_image:
               value: "80"
     feed_after:
       name: "Feed after"
-      description: "Additional line feeds after printing."
-      default: 4
+      description: "Additional line feeds; uses the configured printer default when omitted."
       selector:
         number:
           min: 0

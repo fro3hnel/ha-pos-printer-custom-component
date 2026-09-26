@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, unquote_to_bytes, urlparse
 
+from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from PIL import Image, ImageOps
 
@@ -22,23 +22,43 @@ from .const import (
     PAPER_WIDTH_TO_PIXELS,
     VERSION,
 )
+from .exceptions import integration_error, service_validation_error
 
 _MEDIA_SOURCE_PREFIX = "media-source://media_source/local/"
 _IMAGE_USER_AGENT = f"ha-pos-printer/{VERSION}"
 _ALLOWED_RELATIVE_ROOTS = ("media", "www")
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+_MAX_IMAGE_PIXELS = 40_000_000
+
+
+def _validate_image_size(payload: bytes) -> bytes:
+    """Reject image payloads that are too large for a service action."""
+    if len(payload) > _MAX_IMAGE_BYTES:
+        raise service_validation_error(
+            "Image payload exceeds the 10 MiB limit.",
+            "image_too_large",
+            maximum_mib=10,
+        )
+    return payload
 
 
 def _decode_data_uri(content: str) -> bytes:
     """Decode a data URI into raw bytes."""
     if "," not in content:
-        raise HomeAssistantError("Image data URI is missing the comma separator.")
+        raise service_validation_error(
+            "Image data URI is missing the comma separator.",
+            "data_uri_separator_missing",
+        )
 
     header, payload = content.split(",", 1)
     if ";base64" in header.lower():
         try:
             return base64.b64decode(payload, validate=True)
         except binascii.Error as err:
-            raise HomeAssistantError("Image data URI contains invalid base64.") from err
+            raise service_validation_error(
+                "Image data URI contains invalid base64.",
+                "invalid_data_uri_base64",
+            ) from err
 
     return unquote_to_bytes(payload)
 
@@ -57,16 +77,18 @@ def _extract_media_source_id(value: Any) -> str | None:
             if isinstance(candidate, str) and candidate:
                 return candidate
 
-    raise HomeAssistantError(
-        "Field 'image_media_source' must be a media-source string or selector object."
+    raise service_validation_error(
+        "Field 'image_media_source' must be a media-source string or selector object.",
+        "invalid_media_source_selector",
     )
 
 
 def _resolve_local_media_path(hass: HomeAssistant, media_source_id: str) -> Path:
     """Resolve a local ``media-source://`` URI to a file path."""
     if not media_source_id.startswith(_MEDIA_SOURCE_PREFIX):
-        raise HomeAssistantError(
-            "Only local media-source images are supported by this integration."
+        raise service_validation_error(
+            "Only local media-source images are supported by this integration.",
+            "local_media_source_only",
         )
 
     relative_path = unquote(media_source_id[len(_MEDIA_SOURCE_PREFIX) :]).lstrip("/")
@@ -75,7 +97,10 @@ def _resolve_local_media_path(hass: HomeAssistant, media_source_id: str) -> Path
     target_path = (base_path / relative_path).resolve()
 
     if target_path != base_path and base_path not in target_path.parents:
-        raise HomeAssistantError("Media-source image path escapes the media directory.")
+        raise service_validation_error(
+            "Media-source image path escapes the media directory.",
+            "media_path_escape",
+        )
 
     return target_path
 
@@ -102,8 +127,10 @@ def _resolve_local_path(hass: HomeAssistant, raw_path: str) -> Path:
     allowed_roots.append(Path(hass.config.path("media")).resolve())
 
     if not any(resolved == root or root in resolved.parents for root in allowed_roots):
-        raise HomeAssistantError(
-            "Local image paths must stay inside the Home Assistant config, media, or www directory."
+        raise service_validation_error(
+            "Local image paths must stay inside the Home Assistant config, "
+            "media, or www directory.",
+            "local_path_not_allowed",
         )
 
     return resolved
@@ -116,18 +143,36 @@ async def _async_fetch_remote_image(
 ) -> bytes:
     """Fetch an image over HTTP(S) on the Home Assistant host."""
     session = async_get_clientsession(hass)
-    async with session.get(
-        uri,
-        timeout=timeout,
-        headers={"User-Agent": _IMAGE_USER_AGENT},
-    ) as response:
-        response.raise_for_status()
-        payload = await response.read()
+    try:
+        async with session.get(
+            uri,
+            timeout=timeout,
+            headers={"User-Agent": _IMAGE_USER_AGENT},
+        ) as response:
+            response.raise_for_status()
+            if (
+                response.content_length is not None
+                and response.content_length > _MAX_IMAGE_BYTES
+            ):
+                raise service_validation_error(
+                    "Image payload exceeds the 10 MiB limit.",
+                    "image_too_large",
+                    maximum_mib=10,
+                )
+            payload = await response.content.read(_MAX_IMAGE_BYTES + 1)
+    except (ClientError, TimeoutError) as err:
+        raise integration_error(
+            f"Unable to fetch the remote image: {err}",
+            "remote_image_fetch_failed",
+            error=err,
+        ) from err
 
     if not payload:
-        raise HomeAssistantError("Remote image returned an empty payload.")
+        raise integration_error(
+            "Remote image returned an empty payload.", "remote_image_empty"
+        )
 
-    return payload
+    return _validate_image_size(payload)
 
 
 async def _async_load_local_image(
@@ -136,16 +181,29 @@ async def _async_load_local_image(
 ) -> bytes:
     """Read local image bytes in the executor."""
     try:
-        return await hass.async_add_executor_job(path.read_bytes)
+        payload = await hass.async_add_executor_job(path.read_bytes)
     except FileNotFoundError as err:
-        raise HomeAssistantError(f"Image file not found: {path}") from err
+        raise service_validation_error(
+            f"Image file not found: {path}",
+            "image_file_not_found",
+            path=path,
+        ) from err
+    except OSError as err:
+        raise integration_error(
+            f"Unable to read image file: {err}",
+            "image_file_read_failed",
+            error=err,
+        ) from err
+    return _validate_image_size(payload)
 
 
 def _decode_image_content(content: str) -> bytes:
     """Decode base64 or data-URI image payloads."""
     source = content.strip()
     if not source:
-        raise HomeAssistantError("Image content is empty.")
+        raise service_validation_error(
+            "Image content is empty.", "image_content_empty"
+        )
 
     if source.startswith("data:"):
         return _decode_data_uri(source)
@@ -153,8 +211,9 @@ def _decode_image_content(content: str) -> bytes:
     try:
         return base64.b64decode(source, validate=True)
     except binascii.Error as err:
-        raise HomeAssistantError(
-            "Field 'image_content' must contain base64 or a valid data URI."
+        raise service_validation_error(
+            "Field 'image_content' must contain base64 or a valid data URI.",
+            "invalid_image_content",
         ) from err
 
 
@@ -167,7 +226,7 @@ async def _async_load_camera_image(
     from homeassistant.components.camera import async_get_image
 
     image = await async_get_image(hass, camera_entity_id, timeout=timeout)
-    return image.content
+    return _validate_image_size(image.content)
 
 
 async def async_resolve_image_bytes(
@@ -192,16 +251,19 @@ async def async_resolve_image_bytes(
     active_sources = [name for name, value in sources if value not in (None, "")]
 
     if not active_sources:
-        raise HomeAssistantError("No image source provided.")
+        raise service_validation_error(
+            "No image source provided.", "no_image_source"
+        )
 
     if len(active_sources) > 1:
-        raise HomeAssistantError(
+        raise service_validation_error(
             "Use only one image source at a time: "
-            "image_content, image_url, image_path, image_media_source, or camera_entity_id."
+            "image_content, image_url, image_path, image_media_source, or camera_entity_id.",
+            "multiple_image_sources",
         )
 
     if image_content not in (None, ""):
-        return _decode_image_content(str(image_content))
+        return _validate_image_size(_decode_image_content(str(image_content)))
 
     if image_url not in (None, ""):
         parsed = urlparse(str(image_url))
@@ -210,8 +272,9 @@ async def async_resolve_image_bytes(
         if parsed.scheme == "file":
             path = _resolve_local_path(hass, unquote(parsed.path))
             return await _async_load_local_image(hass, path)
-        raise HomeAssistantError(
-            "Field 'image_url' must use http://, https://, or file://."
+        raise service_validation_error(
+            "Field 'image_url' must use http://, https://, or file://.",
+            "invalid_image_url_scheme",
         )
 
     if image_path not in (None, ""):
@@ -243,6 +306,12 @@ def _encode_processed_image(
 
     try:
         with Image.open(io.BytesIO(image_bytes)) as image:
+            if image.width * image.height > _MAX_IMAGE_PIXELS:
+                raise service_validation_error(
+                    "Image dimensions exceed the 40 megapixel limit.",
+                    "image_dimensions_too_large",
+                    maximum_megapixels=40,
+                )
             image.load()
             processed = ImageOps.exif_transpose(image).convert("L")
 
@@ -270,7 +339,10 @@ def _encode_processed_image(
             buffer = io.BytesIO()
             processed.save(buffer, format="PNG", optimize=True)
     except OSError as err:
-        raise HomeAssistantError("Unable to load or process the selected image.") from err
+        raise integration_error(
+            "Unable to load or process the selected image.",
+            "image_processing_failed",
+        ) from err
 
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
     return f"data:image/png;base64,{encoded}"

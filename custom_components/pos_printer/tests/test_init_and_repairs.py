@@ -5,14 +5,16 @@ from types import SimpleNamespace
 import pytest
 
 import custom_components.pos_printer as integration
+from custom_components.pos_printer.binary_sensor import (
+    async_setup_entry as setup_binary_sensor,
+)
 from custom_components.pos_printer.const import VERSION
-from custom_components.pos_printer.binary_sensor import async_setup_entry as setup_binary_sensor
 from custom_components.pos_printer.models import PrinterRuntimeData
 from custom_components.pos_printer.repairs import (
     async_clear_entry_issues,
     async_validate_bridge_version_issue,
-    async_validate_printer_name_issue,
     async_validate_entry_issues,
+    async_validate_printer_name_issue,
 )
 
 
@@ -22,6 +24,7 @@ class FakeConfigEntries:
     def __init__(self) -> None:
         self.forwarded = []
         self.reloaded = []
+        self.updated = []
 
     async def async_forward_entry_setups(self, entry, platforms):
         self.forwarded.append((entry.entry_id, tuple(platforms)))
@@ -33,6 +36,11 @@ class FakeConfigEntries:
     async def async_reload(self, entry_id):
         self.reloaded.append(entry_id)
 
+    def async_update_entry(self, entry, **changes):
+        self.updated.append(changes)
+        for key, value in changes.items():
+            setattr(entry, key, value)
+
 
 class FakeEntry:
     """Minimal config entry."""
@@ -42,6 +50,9 @@ class FakeEntry:
         self.data = {"printer_name": printer_name}
         self.options = {}
         self.runtime_data = None
+        self.version = 1
+        self.title = printer_name
+        self.unique_id = printer_name
         self._listeners = []
 
     def add_update_listener(self, listener):
@@ -72,13 +83,23 @@ async def test_async_setup_and_entry_lifecycle(monkeypatch):
     monkeypatch.setattr(integration, "async_register_services", fake_register_services)
     monkeypatch.setattr(integration, "setup_print_service", fake_setup_print_service)
     monkeypatch.setattr(integration, "unload_print_service", fake_unload_print_service)
-    monkeypatch.setattr(integration, "async_validate_entry_issues", lambda hass, entry: calls["issues"].append(entry.entry_id))
-    monkeypatch.setattr(integration, "async_clear_entry_issues", lambda hass, entry_id: calls["cleared"].append(entry_id))
+    monkeypatch.setattr(
+        integration,
+        "async_validate_entry_issues",
+        lambda hass, entry: calls["issues"].append(entry.entry_id),
+    )
+    monkeypatch.setattr(
+        integration,
+        "async_clear_entry_issues",
+        lambda hass, entry_id: calls["cleared"].append(entry_id),
+    )
 
     assert await integration.async_setup(hass, {}) is True
     assert await integration.async_setup_entry(hass, entry) is True
     assert entry.runtime_data.printer_name == "printer"
     assert calls["issues"] == ["entry-1"]
+    assert calls["setup"][-1]["paper_width"] == 80
+    assert calls["setup"][-1]["feed_after"] == 4
 
     assert await integration.async_unload_entry(hass, entry) is True
     assert calls["unload"] == [{"entry_id": "entry-1", "printer_name": "printer"}]
@@ -100,6 +121,33 @@ async def test_binary_sensor_setup_uses_runtime_data():
 
     await setup_binary_sensor(SimpleNamespace(), entry, added.extend)
     assert added[0]._printer_name == "from_runtime"
+    assert len(added) == 2
+
+
+@pytest.mark.asyncio
+async def test_migrate_legacy_printer_name_option(monkeypatch):
+    """Migration should keep MQTT identity and remove unsupported controls."""
+    manager = FakeConfigEntries()
+    hass = SimpleNamespace(config_entries=manager)
+    entry = FakeEntry("old_name")
+    entry.options = {"printer_name": "new_name"}
+    removed = []
+
+    registry = SimpleNamespace(
+        async_get_entity_id=lambda platform, domain, unique_id: (
+            f"{platform}.deprecated" if unique_id.endswith("bridge_update") else None
+        ),
+        async_remove=removed.append,
+    )
+    monkeypatch.setattr(integration.er, "async_get", lambda hass: registry)
+
+    assert await integration.async_migrate_entry(hass, entry) is True
+    assert entry.version == 3
+    assert entry.data["printer_name"] == "new_name"
+    assert entry.options == {}
+    assert entry.unique_id == "new_name"
+    assert removed == ["update.deprecated"]
+    assert await integration.async_migrate_entry(hass, entry) is True
 
 
 def test_repairs_helpers_create_and_clear_issues(monkeypatch):
@@ -110,7 +158,9 @@ def test_repairs_helpers_create_and_clear_issues(monkeypatch):
 
     monkeypatch.setattr(
         "homeassistant.helpers.issue_registry.async_create_issue",
-        lambda hass, domain, issue_id, **kwargs: calls["create"].append((issue_id, kwargs["translation_key"])),
+        lambda hass, domain, issue_id, **kwargs: calls["create"].append(
+            (issue_id, kwargs["translation_key"])
+        ),
     )
     monkeypatch.setattr(
         "homeassistant.helpers.issue_registry.async_delete_issue",

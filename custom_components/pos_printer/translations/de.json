@@ -1,5 +1,4 @@
 {
-  "pos_printer": {
     "title": "POS-Printer Bridge",
     "config": {
       "abort": {
@@ -14,73 +13,116 @@
           "title": "POS-Printer Bridge einrichten",
           "data": {
             "printer_name": "Druckername"
-          }
-        },
-        "reconfigure": {
-          "title": "POS-Printer Bridge neu konfigurieren",
-          "description": "Aktualisiert den Druckernamen für die MQTT-Themen.",
-          "data": {
-            "printer_name": "Druckername"
+          },
+          "data_description": {
+            "printer_name": "Von der Bridge veröffentlichte MQTT-Kennung; erlaubt sind Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche."
           }
         }
       }
     },
-    "sensor": {
-      "last_job_status": "Status des letzten Druckauftrags",
-      "last_job_id": "ID des letzten Druckauftrags",
-      "last_job_detail": "Detail des letzten Druckauftrags",
-      "last_status_update": "Zeitpunkt der letzten Statusmeldung",
-      "queue_length": "Warteschlangenlänge",
-      "bridge_version": "Bridge-Version",
-      "last_bridge_log": "Letzte Bridge-Logmeldung",
-      "successful_jobs": "Erfolgreiche Druckaufträge"
-    },
-    "binary_sensor": {
-      "job_error": "Druckauftrag-Fehler"
-    },
-    "update": {
-      "bridge_update": "Bridge-Aktualisierung"
-    },
-    "button": {
-      "bridge_restart": "Bridge neu starten",
-      "pi_software_update": "Pi-Software aktualisieren"
-    },
-    "state": {
-      "success": "Erfolgreich",
-      "partial-error": "Teilweiser Fehler",
-      "error": "Fehler"
-    },
     "options": {
-      "error": {
-        "invalid_printer_name": "Druckernamen dürfen nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten."
-      },
       "step": {
         "init": {
-          "title": "POS-Printer Bridge Optionen",
+          "title": "POS-Drucker-Standardwerte",
+          "description": "Lege Werte fest, die verwendet werden, wenn eine Aktion sie nicht angibt.",
           "data": {
-            "printer_name": "Druckername"
+            "paper_width": "Papierbreite",
+            "feed_after": "Vorschub"
+          },
+          "data_description": {
+            "paper_width": "Breite des Bonpapiers für diesen Drucker.",
+            "feed_after": "Zusätzliche Zeilenvorschübe nach jedem Druckauftrag (0-20)."
           }
         }
+      }
+    },
+    "entity": {
+      "sensor": {
+        "last_job_status": {
+          "name": "Status des letzten Druckauftrags",
+          "state": {
+            "queued": "Eingereiht",
+            "duplicate": "Duplikat",
+            "printing": "Wird gedruckt",
+            "success": "Erfolgreich",
+            "partial-error": "Teilweiser Fehler",
+            "error": "Fehler",
+            "expired": "Abgelaufen"
+          }
+        },
+        "last_job_id": {"name": "ID des letzten Druckauftrags"},
+        "last_job_detail": {"name": "Detail des letzten Druckauftrags"},
+        "last_status_update": {"name": "Letzte Statusmeldung"},
+        "queue_length": {"name": "Warteschlangenlänge"},
+        "bridge_version": {"name": "Bridge-Version"},
+        "last_bridge_log": {"name": "Letzte Bridge-Logmeldung"},
+        "successful_jobs": {"name": "Erfolgreiche Druckaufträge"}
+      },
+      "binary_sensor": {
+        "bridge_connected": {"name": "Bridge-Verbindung"},
+        "job_error": {"name": "Druckauftrag-Fehler"}
+      },
+      "button": {
+        "bridge_restart": {"name": "Bridge-Dienst neu starten"}
       }
     },
     "issues": {
       "invalid_printer_name": {
         "title": "Druckername sollte neu konfiguriert werden",
-        "description": "Der konfigurierte Druckername `{printer_name}` ist für MQTT-Themen ungeeignet. Konfiguriere die Integration neu und verwende nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche."
+        "description": "Der konfigurierte Druckername `{printer_name}` ist für MQTT-Themen ungeeignet. Ändere die Kennung auf der Bridge und entferne den Integrationseintrag; füge ihn danach neu hinzu. Verwende nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche."
       },
       "outdated_bridge_version": {
         "title": "Bridge-Software ist veraltet",
         "description": "Die Bridge für `{printer_name}` meldet Version `{bridge_version}`. Aktualisiere die Raspberry-Pi-Bridge auf mindestens `{minimum_version}`, damit sie zur installierten Home-Assistant-Integration passt."
       }
     },
+    "exceptions": {
+      "invalid_json": {"message": "Das Feld {field} muss gültiges JSON enthalten."},
+      "invalid_job_id": {"message": "Die Auftrags-ID muss eine nichtleere Zeichenfolge mit höchstens {maximum_length} Zeichen sein."},
+      "field_must_be_list": {"message": "Das Feld {field} muss eine Liste von Elementen sein."},
+      "field_items_must_be_objects": {"message": "Das Feld {field} darf nur Objekte enthalten."},
+      "host_processing_required": {"message": "Aktiviere die Bildverarbeitung in Home Assistant für URLs, Dateien, Medienquellen oder Kameras."},
+      "raw_image_content_required": {"message": "Für die unveränderte Bildübergabe ist ein Bildinhalt erforderlich."},
+      "no_printers_configured": {"message": "Es sind keine POS-Drucker konfiguriert."},
+      "unknown_config_entry": {"message": "Der POS-Drucker-Konfigurationseintrag {config_entry_id} ist unbekannt."},
+      "unknown_printer": {"message": "Der Drucker {printer_name} ist unbekannt."},
+      "printer_target_required": {"message": "Wähle einen POS-Drucker-Konfigurationseintrag aus."},
+      "job_must_be_object": {"message": "Das Feld Auftrag muss ein Objekt sein."},
+      "no_message_elements": {"message": "Füge mindestens ein Text-, Barcode- oder Bildelement hinzu."},
+      "no_text_content": {"message": "Füge druckbaren Inhalt in Titel, Text oder Fußzeile ein."},
+      "image_source_required": {"message": "Wähle eine Bildquelle aus."},
+      "bridge_offline": {"message": "Die Bridge für {printer_name} ist offline."},
+      "image_too_large": {"message": "Die Bilddaten überschreiten die Grenze von {maximum_mib} MiB."},
+      "data_uri_separator_missing": {"message": "In der Bild-Data-URI fehlt das trennende Komma."},
+      "invalid_data_uri_base64": {"message": "Die Bild-Data-URI enthält ungültige Base64-Daten."},
+      "invalid_media_source_selector": {"message": "Die ausgewählte Medienquelle ist ungültig."},
+      "local_media_source_only": {"message": "Es werden nur lokale Medienquellen unterstützt."},
+      "media_path_escape": {"message": "Der Medienpfad verlässt das Medienverzeichnis."},
+      "local_path_not_allowed": {"message": "Lokale Bildpfade müssen innerhalb des Home-Assistant-Config-, Medien- oder www-Verzeichnisses liegen."},
+      "remote_image_empty": {"message": "Das entfernte Bild enthält keine Daten."},
+      "remote_image_fetch_failed": {"message": "Das entfernte Bild konnte nicht geladen werden: {error}"},
+      "image_file_not_found": {"message": "Die Bilddatei wurde nicht gefunden: {path}"},
+      "image_file_read_failed": {"message": "Die Bilddatei konnte nicht gelesen werden: {error}"},
+      "image_content_empty": {"message": "Der Bildinhalt ist leer."},
+      "invalid_image_content": {"message": "Der Bildinhalt muss Base64-Daten oder eine gültige Data-URI enthalten."},
+      "no_image_source": {"message": "Es wurde keine Bildquelle angegeben."},
+      "multiple_image_sources": {"message": "Verwende genau eine Bildquelle."},
+      "invalid_image_url_scheme": {"message": "Die Bild-URL muss http://, https:// oder file:// verwenden."},
+      "image_dimensions_too_large": {"message": "Das Bild überschreitet die Grenze von {maximum_megapixels} Megapixeln."},
+      "image_processing_failed": {"message": "Das ausgewählte Bild konnte nicht geladen oder verarbeitet werden."}
+    },
     "services": {
       "print": {
         "name": "Druckauftrag senden",
         "description": "Erweiterter Druckservice für frei definierte POS-Druckjobs mit optionaler Bildverarbeitung auf dem Home-Assistant-Host.",
         "fields": {
-          "printer_name": {
+          "config_entry_id": {
             "name": "Drucker",
-            "description": "Zieldrucker."
+            "description": "Zu verwendender POS-Drucker-Konfigurationseintrag."
+          },
+          "printer_name": {
+            "name": "Alter Druckername",
+            "description": "Veraltete MQTT-Druckerkennung für bestehende Automationen."
           },
           "job": {
             "name": "Vollständiges Job-Objekt",
@@ -92,7 +134,7 @@
           },
           "job_id": {
             "name": "Auftrags-ID",
-            "description": "Eindeutige Kennung des Druckauftrags."
+            "description": "Optionale nichtleere Kennung (maximal 128 Zeichen). Verwende sie nur für die erneute Zustellung desselben beabsichtigten Ausdrucks und für jeden neuen Ausdruck eine neue ID."
           },
           "priority": {
             "name": "Priorität",
@@ -248,9 +290,17 @@
         "name": "Textnachricht drucken",
         "description": "Dashboard-freundlicher Textdruck für Notizen, Helper-Texte und Automationsmeldungen.",
         "fields": {
-          "printer_name": {
+          "config_entry_id": {
             "name": "Drucker",
-            "description": "Zieldrucker."
+            "description": "Zu verwendender POS-Drucker-Konfigurationseintrag."
+          },
+          "printer_name": {
+            "name": "Alter Druckername",
+            "description": "Veraltete MQTT-Druckerkennung für bestehende Automationen."
+          },
+          "job_id": {
+            "name": "Auftrags-ID",
+            "description": "Optionale nichtleere Kennung (maximal 128 Zeichen). Verwende sie nur für die erneute Zustellung desselben beabsichtigten Ausdrucks und für jeden neuen Ausdruck eine neue ID."
           },
           "title": {
             "name": "Titel",
@@ -310,9 +360,17 @@
         "name": "Bild drucken",
         "description": "Bildorientierter Druck mit Vorverarbeitung auf dem Home-Assistant-Host.",
         "fields": {
-          "printer_name": {
+          "config_entry_id": {
             "name": "Drucker",
-            "description": "Zieldrucker."
+            "description": "Zu verwendender POS-Drucker-Konfigurationseintrag."
+          },
+          "printer_name": {
+            "name": "Alter Druckername",
+            "description": "Veraltete MQTT-Druckerkennung für bestehende Automationen."
+          },
+          "job_id": {
+            "name": "Auftrags-ID",
+            "description": "Optionale nichtleere Kennung (maximal 128 Zeichen). Verwende sie nur für die erneute Zustellung desselben beabsichtigten Ausdrucks und für jeden neuen Ausdruck eine neue ID."
           },
           "title": {
             "name": "Titel",
@@ -401,5 +459,4 @@
         }
       }
     }
-  }
 }

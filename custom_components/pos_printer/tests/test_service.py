@@ -5,13 +5,15 @@ import logging
 from types import SimpleNamespace
 
 import pytest
+import voluptuous as vol
 import yaml
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.service import _SERVICES_SCHEMA
 
-from custom_components.pos_printer.const import DOMAIN
+from custom_components.pos_printer.const import DOMAIN, EVENT_AVAILABILITY
 from custom_components.pos_printer.printer import (
     SERVICE_PRINT_IMAGE_SCHEMA,
+    SERVICE_PRINT_PICTOGRAMS_SCHEMA,
     SERVICE_PRINT_SCHEMA,
     SERVICE_PRINT_TEXT_SCHEMA,
     setup_print_service,
@@ -117,7 +119,52 @@ async def test_print_service_publishes(mqtt_publish_mock):
     assert call["topic"] == "print/pos/printer/job"
     payload = json.loads(call["payload"])
     assert payload["job_id"]
+    assert len(payload["job_id"]) == 32
     assert payload["message"][0]["content"] == "Hello"
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        SERVICE_PRINT_SCHEMA,
+        SERVICE_PRINT_TEXT_SCHEMA,
+        SERVICE_PRINT_IMAGE_SCHEMA,
+        SERVICE_PRINT_PICTOGRAMS_SCHEMA,
+    ],
+)
+@pytest.mark.parametrize("job_id", ["", "   ", "x" * 129, 123, None])
+def test_action_schemas_reject_invalid_job_ids(schema, job_id):
+    """Every action should enforce the shared non-empty 128-character limit."""
+    with pytest.raises(vol.Invalid):
+        schema({"job_id": job_id})
+
+
+def test_action_schemas_accept_maximum_job_id_length():
+    """A non-empty string at the documented maximum should remain valid."""
+    assert SERVICE_PRINT_SCHEMA({"job_id": "x" * 128})["job_id"] == "x" * 128
+
+
+@pytest.mark.asyncio
+async def test_full_job_object_rejects_invalid_embedded_job_id(mqtt_publish_mock):
+    """Advanced raw jobs must not bypass action-level job ID validation."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "printer"})
+
+    with pytest.raises(HomeAssistantError) as error:
+        await hass.services.async_call(
+            DOMAIN,
+            "print",
+            {
+                "job": {
+                    "job_id": "x" * 129,
+                    "message": [{"type": "text", "content": "Hello"}],
+                }
+            },
+            blocking=True,
+        )
+
+    assert error.value.translation_key == "invalid_job_id"
+    assert mqtt_publish_mock == []
 
 
 @pytest.mark.asyncio
@@ -289,6 +336,97 @@ async def test_print_image_service_processes_on_home_assistant_host(
 
 
 @pytest.mark.asyncio
+async def test_print_pictograms_service_builds_one_offline_image(
+    monkeypatch, mqtt_publish_mock
+):
+    """Pictograms should retain their order and publish as one image job."""
+    hass = FakeHass()
+    await setup_print_service(hass, {"printer_name": "printer"})
+    rendered = []
+
+    def fake_render_pictograms(pictograms, paper_width):
+        rendered.append((pictograms, paper_width))
+        return "data:image/png;base64,pictograms"
+
+    monkeypatch.setattr(
+        "custom_components.pos_printer.printer.render_pictogram_data_uri",
+        fake_render_pictograms,
+    )
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print_pictograms",
+        {
+            "pictograms": ["t_shirt", "shorts", "sneakers"],
+            "title": "Was ziehe ich heute an?",
+            "subtitle": "21.07.2026 · 07:00–17:00 · 18–25 °C",
+            "paper_width": 80,
+            "feed_after": 3,
+        },
+        blocking=True,
+    )
+
+    assert rendered == [(["t_shirt", "shorts", "sneakers"], 80)]
+    assert len(mqtt_publish_mock) == 1
+    payload = json.loads(mqtt_publish_mock[-1]["payload"])
+    assert payload["feed_after"] == 3
+    assert payload["message"] == [
+        {
+            "type": "text",
+            "content": "Was ziehe ich heute an?",
+            "alignment": "center",
+            "bold": True,
+            "double_height": True,
+        },
+        {
+            "type": "text",
+            "content": "21.07.2026 · 07:00–17:00 · 18–25 °C",
+            "alignment": "center",
+        },
+        {
+            "type": "image",
+            "content": "data:image/png;base64,pictograms",
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    "pictograms",
+    [
+        [],
+        "t_shirt",
+        ["not_registered"],
+        ["t_shirt", "t_shirt"],
+        ["unknown"] * 13,
+    ],
+)
+def test_print_pictograms_schema_rejects_invalid_lists(pictograms):
+    """Pictogram input must be known, unique, list-shaped, and bounded."""
+    with pytest.raises(vol.Invalid):
+        SERVICE_PRINT_PICTOGRAMS_SCHEMA({"pictograms": pictograms})
+
+
+def test_print_pictograms_schema_accepts_twelve_unique_items():
+    """The documented upper bound should remain usable."""
+    pictograms = [
+        "t_shirt",
+        "long_sleeve",
+        "shorts",
+        "trousers",
+        "sweater",
+        "light_jacket",
+        "winter_coat",
+        "raincoat",
+        "beanie",
+        "gloves",
+        "sneakers",
+        "rain_boots",
+    ]
+    validated = SERVICE_PRINT_PICTOGRAMS_SCHEMA({"pictograms": pictograms})
+    assert validated["pictograms"] == pictograms
+
+
+@pytest.mark.asyncio
 async def test_print_service_builds_text_elements_from_text_lines(mqtt_publish_mock):
     """Test building multiple text elements from text_lines."""
     hass = FakeHass()
@@ -397,8 +535,8 @@ async def test_print_service_publishes_full_job_object(mqtt_publish_mock):
 async def test_multiple_printers_publish_to_correct_topic(mqtt_publish_mock):
     """Ensure service routes jobs to the selected printer."""
     hass = FakeHass()
-    await setup_print_service(hass, {"printer_name": "one"})
-    await setup_print_service(hass, {"printer_name": "two"})
+    await setup_print_service(hass, {"entry_id": "entry-one", "printer_name": "one"})
+    await setup_print_service(hass, {"entry_id": "entry-two", "printer_name": "two"})
 
     await hass.services.async_call(
         DOMAIN,
@@ -415,6 +553,57 @@ async def test_multiple_printers_publish_to_correct_topic(mqtt_publish_mock):
         blocking=True,
     )
     assert mqtt_publish_mock[-1]["topic"] == "print/pos/two/job"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print",
+        {
+            "config_entry_id": "entry-one",
+            "message": [{"type": "text", "content": "C"}],
+        },
+        blocking=True,
+    )
+    assert mqtt_publish_mock[-1]["topic"] == "print/pos/one/job"
+
+
+@pytest.mark.asyncio
+async def test_configured_print_defaults_are_applied(mqtt_publish_mock):
+    """Omitted paper settings should come from the selected printer entry."""
+    hass = FakeHass()
+    await setup_print_service(
+        hass,
+        {
+            "entry_id": "entry",
+            "printer_name": "printer",
+            "paper_width": 53,
+            "feed_after": 2,
+        },
+    )
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print_text",
+        {"config_entry_id": "entry", "text": "Defaults"},
+        blocking=True,
+    )
+    payload = json.loads(mqtt_publish_mock[-1]["payload"])
+    assert payload["paper_width"] == 53
+    assert payload["feed_after"] == 2
+
+    await hass.services.async_call(
+        DOMAIN,
+        "print",
+        {
+            "config_entry_id": "entry",
+            "job": json.dumps(
+                {"message": [{"type": "text", "content": "JSON defaults"}]}
+            ),
+        },
+        blocking=True,
+    )
+    payload = json.loads(mqtt_publish_mock[-1]["payload"])
+    assert payload["paper_width"] == 53
+    assert payload["feed_after"] == 2
 
 
 @pytest.mark.asyncio
@@ -444,11 +633,26 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
 
     status_topic = "print/pos/printer/ack"
     log_topic = "print/pos/printer/log"
+    availability_topic = "print/pos/printer/availability"
 
     assert status_topic in subscriptions
     assert log_topic in subscriptions
+    assert availability_topic in subscriptions
 
-    subscriptions[status_topic](SimpleNamespace(payload=json.dumps({"status": "success"})))
+    subscriptions[status_topic](
+        SimpleNamespace(
+            payload=json.dumps(
+                {
+                    "heartbeat": {
+                        "queue_len": 3,
+                        "successful_jobs": 12,
+                        "timestamp": 1700000000,
+                        "version": "1.2.3",
+                    }
+                }
+            )
+        )
+    )
     subscriptions[log_topic](
         SimpleNamespace(
             payload=json.dumps(
@@ -463,8 +667,24 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
     )
 
     assert (
+        EVENT_AVAILABILITY,
+        {"printer_name": "printer", "available": True},
+    ) in hass.bus.events
+    assert (
         f"{DOMAIN}.status",
-        {"status": "success", "printer_name": "printer"},
+        {
+            "heartbeat": {
+                "queue_len": 3,
+                "successful_jobs": 12,
+                "timestamp": 1700000000,
+                "version": "1.2.3",
+            },
+            "printer_name": "printer",
+            "queue_len": 3,
+            "successful_jobs": 12,
+            "timestamp": 1700000000,
+            "version": "1.2.3",
+        },
     ) in hass.bus.events
     assert (
         f"{DOMAIN}.bridge_log",
@@ -476,6 +696,30 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
             "printer_name": "printer",
         },
     ) in hass.bus.events
+
+    subscriptions[availability_topic](SimpleNamespace(payload=b"offline"))
+    assert (
+        EVENT_AVAILABILITY,
+        {"printer_name": "printer", "available": False},
+    ) in hass.bus.events
+
+
+@pytest.mark.asyncio
+async def test_known_offline_bridge_rejects_print(mqtt_publish_mock):
+    """Known-lost jobs should fail visibly instead of being published."""
+    hass = FakeHass()
+    runtime = await setup_print_service(hass, {"printer_name": "printer"})
+    runtime.availability_known = True
+    runtime.available = False
+
+    with pytest.raises(HomeAssistantError, match="offline"):
+        await hass.services.async_call(
+            DOMAIN,
+            "print_text",
+            {"text": "Will not be lost"},
+            blocking=True,
+        )
+    assert mqtt_publish_mock == []
 
 
 @pytest.mark.asyncio
@@ -535,7 +779,15 @@ def test_service_schemas_accept_string_values_from_selectors():
     assert SERVICE_PRINT_SCHEMA({"image_rotation": "90"})["image_rotation"] == 90
     assert SERVICE_PRINT_TEXT_SCHEMA({"paper_width": "80"})["paper_width"] == 80
     assert SERVICE_PRINT_IMAGE_SCHEMA({"paper_width": "53"})["paper_width"] == 53
-    assert SERVICE_PRINT_IMAGE_SCHEMA({"image_rotation": "180"})["image_rotation"] == 180
+    assert (
+        SERVICE_PRINT_IMAGE_SCHEMA({"image_rotation": "180"})["image_rotation"] == 180
+    )
+    assert (
+        SERVICE_PRINT_PICTOGRAMS_SCHEMA(
+            {"pictograms": ["unknown"], "paper_width": "80"}
+        )["paper_width"]
+        == 80
+    )
 
 
 def test_services_yaml_matches_home_assistant_service_schema():
@@ -558,4 +810,10 @@ def test_services_yaml_matches_home_assistant_service_schema():
             "options"
         ][1]["value"]
         == "90"
+    )
+    assert (
+        validated["print_pictograms"]["fields"]["pictograms"]["selector"]["select"][
+            "multiple"
+        ]
+        is True
     )

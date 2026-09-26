@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 import io
 import sys
-from types import ModuleType
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
@@ -186,8 +186,12 @@ async def test_remote_fetch_and_missing_payload_branches(tmp_path, monkeypatch):
     calls = []
 
     class FakeResponse:
-        def __init__(self, payload):
+        def __init__(self, payload, content_length=None):
             self._payload = payload
+            self.content = self
+            self.content_length = (
+                len(payload) if content_length is None else content_length
+            )
 
         async def __aenter__(self):
             return self
@@ -198,8 +202,8 @@ async def test_remote_fetch_and_missing_payload_branches(tmp_path, monkeypatch):
         def raise_for_status(self):
             return None
 
-        async def read(self):
-            return self._payload
+        async def read(self, maximum_bytes):
+            return self._payload[:maximum_bytes]
 
     class FakeSession:
         def __init__(self, payload):
@@ -226,6 +230,13 @@ async def test_remote_fetch_and_missing_payload_branches(tmp_path, monkeypatch):
     )
     with pytest.raises(HomeAssistantError, match="empty payload"):
         await async_resolve_image_bytes(hass, {"image_url": "https://example.com/logo.png"})
+
+    monkeypatch.setattr(
+        "custom_components.pos_printer.image_processing.async_get_clientsession",
+        lambda hass: FakeSession(b"x" * (10 * 1024 * 1024 + 1)),
+    )
+    with pytest.raises(HomeAssistantError, match="10 MiB"):
+        await async_resolve_image_bytes(hass, {"image_url": "https://example.com/large.png"})
 
 
 @pytest.mark.asyncio

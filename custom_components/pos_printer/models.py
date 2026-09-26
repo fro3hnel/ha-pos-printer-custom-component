@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from homeassistant.config_entries import ConfigEntry
+
 
 @dataclass(slots=True)
 class PrinterRuntimeData:
@@ -15,8 +17,14 @@ class PrinterRuntimeData:
     print_topic: str
     status_topic: str
     log_topic: str
+    availability_topic: str = ""
     unsub_status: Callable[[], None] | None = None
     unsub_log: Callable[[], None] | None = None
+    unsub_availability: Callable[[], None] | None = None
+    available: bool = False
+    availability_known: bool = False
+    default_paper_width: int = 80
+    default_feed_after: int = 4
     last_status: dict[str, Any] = field(default_factory=dict)
     last_log: dict[str, Any] = field(default_factory=dict)
 
@@ -27,3 +35,6 @@ class DomainData:
 
     printers: dict[str, PrinterRuntimeData] = field(default_factory=dict)
     services_registered: bool = False
+
+
+PosPrinterConfigEntry = ConfigEntry[PrinterRuntimeData]

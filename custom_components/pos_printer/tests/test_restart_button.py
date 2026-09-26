@@ -1,11 +1,8 @@
-import pytest
 from types import SimpleNamespace
 
-from custom_components.pos_printer.button import (
-    PiSoftwareUpdateButton,
-    RestartButton,
-    async_setup_entry,
-)
+import pytest
+
+from custom_components.pos_printer.button import RestartButton, async_setup_entry
 from custom_components.pos_printer.models import PrinterRuntimeData
 
 
@@ -39,20 +36,8 @@ async def test_restart_button_publishes_command(mqtt_publish_mock):
 
 
 @pytest.mark.asyncio
-async def test_pi_update_button_publishes_command(mqtt_publish_mock):
-    hass = FakeHass()
-    button = PiSoftwareUpdateButton("printer", "entry")
-    button.hass = hass
-    await button.async_press()
-    assert mqtt_publish_mock, "mqtt.async_publish was not called"
-    call = mqtt_publish_mock[-1]
-    assert call["topic"] == "print/pos/printer/pi_update"
-    assert call["payload"] == ""
-
-
-@pytest.mark.asyncio
 async def test_button_platform_setup_uses_runtime_data():
-    """Platform setup should add both buttons for the effective printer name."""
+    """Platform setup should add the service restart for the effective printer."""
     added = []
     entry = SimpleNamespace(
         entry_id="entry",
@@ -68,5 +53,5 @@ async def test_button_platform_setup_uses_runtime_data():
     )
 
     await async_setup_entry(FakeHass(), entry, added.extend)
-    assert len(added) == 2
+    assert len(added) == 1
     assert added[0]._printer_name == "from_runtime"

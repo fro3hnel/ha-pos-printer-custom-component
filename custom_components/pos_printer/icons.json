@@ -1,0 +1,27 @@
+{
+  "entity": {
+    "sensor": {
+      "last_job_status": {
+        "default": "mdi:printer-alert",
+        "state": {
+          "queued": "mdi:printer-clock",
+          "duplicate": "mdi:content-duplicate",
+          "printing": "mdi:printer-pos",
+          "success": "mdi:printer-check",
+          "partial-error": "mdi:printer-alert",
+          "error": "mdi:printer-off",
+          "expired": "mdi:timer-off-outline"
+        }
+      },
+      "last_job_id": {"default": "mdi:identifier"},
+      "last_job_detail": {"default": "mdi:text-box-outline"},
+      "queue_length": {"default": "mdi:format-list-numbered"},
+      "bridge_version": {"default": "mdi:tag-outline"},
+      "last_bridge_log": {"default": "mdi:text-box-search-outline"},
+      "successful_jobs": {"default": "mdi:counter"}
+    },
+    "button": {
+      "bridge_restart": {"default": "mdi:restart"}
+    }
+  }
+}
