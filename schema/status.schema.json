@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "POS Printer Bridge status v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "printer_name",
+    "bridge_version",
+    "online",
+    "timestamp",
+    "heartbeat_interval",
+    "queue_length",
+    "printer_status",
+    "last_job"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "printer_name": {"type": "string"},
+    "bridge_version": {"type": "string"},
+    "online": {"type": "boolean"},
+    "timestamp": {"type": "integer", "minimum": 0},
+    "heartbeat_interval": {"type": "integer", "minimum": 1},
+    "queue_length": {"type": "integer", "minimum": 0},
+    "printer_status": {"type": ["integer", "string"]},
+    "successful_jobs": {"type": "integer", "minimum": 0},
+    "last_job": {
+      "type": ["object", "null"],
+      "required": ["id", "status", "detail", "duplicate", "timestamp"],
+      "properties": {
+        "id": {"type": "string"},
+        "status": {"type": "string"},
+        "detail": {"type": "string"},
+        "duplicate": {"type": "boolean"},
+        "timestamp": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "cpu_temp": {"type": ["number", "null"]},
+    "cpu_percent": {"type": "number"},
+    "mem_available": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}

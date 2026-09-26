@@ -135,6 +135,7 @@ python3 bridge/printer_bridge.py
 
 - Publish a job to `print/pos/<printer_name>/job`
 - Subscribe for acknowledgements on `print/pos/<printer_name>/ack`
+- Subscribe for retained bridge status on `print/pos/<printer_name>/status`
 - Subscribe for bridge logs on `print/pos/<printer_name>/log`
 - Subscribe for retained availability on `print/pos/<printer_name>/availability`
 - The bridge announces itself on `pos_printer/discovery/<printer_name>`
@@ -154,6 +155,14 @@ when the worker starts it, and one of `success`, `partial-error`, `error`, or
 `expired` as the final state. A duplicate acknowledgement also contains
 `"duplicate": true` and never creates another queue entry. `expires` is checked
 immediately before printing.
+
+`status` is a retained JSON snapshot defined by
+[`schema/status.schema.json`](../schema/status.schema.json). Its schema version
+is `1`; it contains the current queue length, raw printer status, bridge
+version, heartbeat interval, availability hint, and the latest job lifecycle
+result. The dedicated availability topic remains authoritative for the MQTT
+last-will state. The bridge updates the snapshot on connect, each job transition,
+and every heartbeat.
 
 `job_id` must be a non-empty string with at most 128 characters. Use a new ID
 for every intended physical print. Reuse an ID only to redeliver the same job;

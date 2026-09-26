@@ -13,9 +13,10 @@ Home Assistant action -> MQTT broker -> Raspberry Pi bridge -> Redis queue -> pr
 ```
 
 The integration is push-based. It does not poll: acknowledgements, queue data,
-bridge health, and logs arrive over MQTT. The bridge publishes retained
-availability with an MQTT last will, so Home Assistant can distinguish an
-offline bridge from stale data.
+bridge health, and logs arrive over MQTT. The bridge publishes a retained,
+versioned status snapshot and retained availability with an MQTT last will, so
+Home Assistant restores entities immediately after a restart and can distinguish
+an offline bridge from stale data.
 
 ## Prerequisites
 
@@ -58,10 +59,10 @@ parameters.
 ### Upgrade compatibility
 
 Update the Home Assistant integration and Raspberry Pi bridge together. They
-form one MQTT protocol pair for discovery, availability, acknowledgements, and
-job deduplication. Existing clients can continue to submit compatible jobs after
-the upgrade, but clients that do not know the new `duplicate` status may display
-it as an unknown value.
+form one MQTT protocol pair for discovery, availability, retained status,
+acknowledgements, and job deduplication. Existing clients can continue to submit
+compatible jobs after the upgrade, but clients that do not know the new
+`duplicate` status may display it as an unknown value.
 
 ## Home Assistant setup
 
@@ -228,6 +229,7 @@ duplicate receipts when a printer error occurs after partial output.
 | Last print job detail | Disabled | Bridge error detail |
 | Last status update | Disabled | Last bridge timestamp |
 | Queue length | Disabled | Jobs waiting on the bridge |
+| Printer status | Disabled | Raw Bixolon SDK status for diagnostics |
 | Bridge version | Disabled | Installed bridge version |
 | Last bridge log message | Disabled | Diagnostic bridge log |
 | Successful print jobs | Disabled | Redis-persisted total |
@@ -294,6 +296,7 @@ Repair issues are created when:
 
 - a legacy config entry contains an invalid MQTT printer identifier;
 - the bridge reports a version older than the installed integration.
+- retained MQTT Discovery entities from a pre-native bridge still remain.
 
 ## Known limitations
 
