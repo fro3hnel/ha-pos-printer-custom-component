@@ -8,6 +8,8 @@ rules:
   config-flow-test-coverage: done
   dependency-transparency: done
   docs-actions: done
+  docs-triggers: done
+  docs-conditions: done
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
@@ -33,10 +35,7 @@ rules:
   docs-installation-parameters: done
   entity-unavailable: done
   integration-owner: done
-  log-when-unavailable:
-    status: exempt
-    comment: |
-      This integration is passive and MQTT-push based. It does not maintain its own availability probe.
+  log-when-unavailable: done
   parallel-updates: done
   reauthentication-flow:
     status: exempt
@@ -67,9 +66,13 @@ rules:
   entity-device-class: done
   entity-disabled-by-default: done
   entity-translations: done
-  exception-translations: todo
-  icon-translations: todo
-  reconfiguration-flow: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow:
+    status: exempt
+    comment: |
+      The MQTT printer identifier is the stable device identity and must not be renamed in place.
+      Mutable per-printer print defaults are managed by the options flow.
   repair-issues: done
   stale-devices:
     status: exempt
