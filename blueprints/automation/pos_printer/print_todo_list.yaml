@@ -1,0 +1,84 @@
+blueprint:
+  name: Print a to-do or shopping list
+  description: >-
+    Fetch all incomplete items from a Home Assistant to-do list and print them
+    when user-selected triggers fire.
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    automation_triggers:
+      name: Triggers
+      description: For example, a dashboard helper button or a fixed time.
+      selector:
+        trigger:
+    todo_list:
+      name: To-do list
+      selector:
+        entity:
+          filter:
+            - domain: todo
+    printer_config_entry:
+      name: Printer
+      selector:
+        config_entry:
+          integration: pos_printer
+    title:
+      name: Title
+      default: Shopping list
+      selector:
+        text:
+    empty_text:
+      name: Text for an empty list
+      default: No open items.
+      selector:
+        text:
+    paper_width:
+      name: Paper width
+      default: 80
+      selector:
+        select:
+          options:
+            - label: 53 mm
+              value: 53
+            - label: 80 mm
+              value: 80
+    feed_after:
+      name: Feed after
+      default: 4
+      selector:
+        number:
+          min: 0
+          step: 1
+
+mode: queued
+max: 10
+max_exceeded: warning
+
+variables:
+  todo_entity: !input todo_list
+  empty_list_text: !input empty_text
+
+triggers: !input automation_triggers
+
+actions:
+  - action: todo.get_items
+    target:
+      entity_id: !input todo_list
+    data:
+      status: needs_action
+    response_variable: todo_items
+  - action: pos_printer.print_text
+    data:
+      config_entry_id: !input printer_config_entry
+      title: !input title
+      text: >-
+        {% set items = todo_items.get(todo_entity, {}).get('items', []) %}
+        {% if items %}
+        {% for item in items %}- {{ item.summary }}{% if not loop.last %}
+        {% endif %}{% endfor %}
+        {% else %}
+        {{ empty_list_text }}
+        {% endif %}
+      paper_width: !input paper_width
+      feed_after: !input feed_after

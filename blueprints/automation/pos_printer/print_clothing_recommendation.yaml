@@ -1,0 +1,331 @@
+blueprint:
+  name: Print a child-friendly clothing recommendation
+  description: >-
+    Evaluate an hourly weather forecast for a configurable daytime window and
+    print large clothing pictograms that children can understand without
+    reading. Requires a POS-Printer Bridge version with the
+    pos_printer.print_pictograms action.
+  domain: automation
+  source_url: https://github.com/fro3hnel/ha-pos-printer-custom-component/blob/main/blueprints/automation/pos_printer/print_clothing_recommendation.yaml
+  homeassistant:
+    min_version: 2025.11.0
+  input:
+    basic_settings:
+      name: Weather and printer
+      icon: mdi:tshirt-crew
+      input:
+        automation_triggers:
+          name: Triggers
+          description: For example, a fixed morning time or a dashboard button.
+          selector:
+            trigger:
+        automation_conditions:
+          name: Optional conditions
+          description: All selected conditions must pass before printing.
+          default: []
+          selector:
+            condition:
+        weather_entity:
+          name: Weather forecast
+          description: The weather entity must support hourly forecasts.
+          selector:
+            entity:
+              filter:
+                - domain: weather
+        printer_config_entry:
+          name: Printer
+          selector:
+            config_entry:
+              integration: pos_printer
+
+    forecast_window:
+      name: Forecast window
+      icon: mdi:clock-outline
+      input:
+        window_start:
+          name: Start time
+          default: "07:00:00"
+          selector:
+            time:
+        window_end:
+          name: End time
+          description: Must be later than the start time on the same day.
+          default: "17:00:00"
+          selector:
+            time:
+        rain_gear:
+          name: Rain protection
+          default: coat_boots
+          selector:
+            select:
+              options:
+                - label: Raincoat and rain boots
+                  value: coat_boots
+                - label: Raincoat and umbrella
+                  value: coat_umbrella
+                - label: Raincoat, rain boots, and umbrella
+                  value: coat_boots_umbrella
+
+    print_settings:
+      name: Print layout
+      icon: mdi:printer-pos
+      input:
+        title:
+          name: Title
+          default: Was ziehe ich heute an?
+          selector:
+            text:
+        show_weather_summary:
+          name: Show weather summary
+          description: Print date, time window, temperature range, and rain risk.
+          default: true
+          selector:
+            boolean:
+        paper_width:
+          name: Paper width
+          default: "80"
+          selector:
+            select:
+              options:
+                - label: 53 mm
+                  value: "53"
+                - label: 80 mm
+                  value: "80"
+        feed_after:
+          name: Feed after
+          default: 4
+          selector:
+            number:
+              min: 0
+              step: 1
+
+    recommendation_thresholds:
+      name: Advanced clothing thresholds
+      icon: mdi:thermometer-lines
+      description: Temperatures are interpreted in degrees Celsius.
+      collapsed: true
+      input:
+        t_shirt_from_max:
+          name: T-shirt from daily maximum
+          default: 18
+          selector:
+            number:
+              min: -20
+              max: 40
+              step: 1
+              unit_of_measurement: °C
+        shorts_from_min:
+          name: Shorts from daily minimum
+          default: 16
+          selector:
+            number:
+              min: -20
+              max: 40
+              step: 1
+              unit_of_measurement: °C
+        shorts_from_max:
+          name: Shorts from daily maximum
+          default: 22
+          selector:
+            number:
+              min: -20
+              max: 40
+              step: 1
+              unit_of_measurement: °C
+        sweater_below_min:
+          name: Sweater below daily minimum
+          default: 16
+          selector:
+            number:
+              min: -30
+              max: 30
+              step: 1
+              unit_of_measurement: °C
+        light_jacket_below_min:
+          name: Light jacket below daily minimum
+          default: 12
+          selector:
+            number:
+              min: -30
+              max: 30
+              step: 1
+              unit_of_measurement: °C
+        winter_below_min:
+          name: Winter clothing below daily minimum
+          default: 5
+          selector:
+            number:
+              min: -30
+              max: 20
+              step: 1
+              unit_of_measurement: °C
+        rain_probability_threshold:
+          name: Rain probability threshold
+          default: 40
+          selector:
+            number:
+              min: 0
+              max: 100
+              step: 5
+              unit_of_measurement: "%"
+
+mode: queued
+max: 10
+max_exceeded: warning
+
+variables:
+  weather_entity: !input weather_entity
+  window_start: !input window_start
+  window_end: !input window_end
+  selected_rain_gear: !input rain_gear
+  show_summary: !input show_weather_summary
+  t_shirt_threshold: !input t_shirt_from_max
+  shorts_min_threshold: !input shorts_from_min
+  shorts_max_threshold: !input shorts_from_max
+  sweater_threshold: !input sweater_below_min
+  light_jacket_threshold: !input light_jacket_below_min
+  winter_threshold: !input winter_below_min
+  rain_threshold: !input rain_probability_threshold
+
+triggers: !input automation_triggers
+conditions: !input automation_conditions
+
+actions:
+  - action: weather.get_forecasts
+    target:
+      entity_id: !input weather_entity
+    data:
+      type: hourly
+    response_variable: hourly_forecast
+    continue_on_error: true
+
+  - variables:
+      forecast_rows: >-
+        {% if hourly_forecast is defined and hourly_forecast is mapping %}
+          {{ hourly_forecast.get(weather_entity, {}).get('forecast', []) }}
+        {% else %}
+          {{ [] }}
+        {% endif %}
+
+  - variables:
+      recommendation: >-
+        {% set start_today = today_at(window_start) %}
+        {% set end_today = today_at(window_end) %}
+        {% set valid_window = end_today > start_today %}
+        {% set day_offset = timedelta(days=1) if valid_window and now() >= end_today else timedelta() %}
+        {% set start_at = start_today + day_offset %}
+        {% set end_at = end_today + day_offset %}
+        {% set temperature_unit = state_attr(weather_entity, 'temperature_unit') | default('°C', true) %}
+        {% set ns = namespace(temperatures=[], rain_probabilities=[], conditions=[]) %}
+        {% if valid_window and forecast_rows is iterable and forecast_rows is not string %}
+          {% for item in forecast_rows if item is mapping %}
+            {% set item_datetime = as_datetime(item.get('datetime'), none) %}
+            {% if item_datetime is not none %}
+              {% set item_local = as_local(item_datetime) %}
+              {% if item_local >= start_at and item_local < end_at %}
+                {% set temperature = item.get('temperature') | float(default=none) %}
+                {% if temperature is not none %}
+                  {% if temperature_unit in ['°F', 'F'] %}
+                    {% set temperature = (temperature - 32) * 5 / 9 %}
+                  {% endif %}
+                  {% set ns.temperatures = ns.temperatures + [temperature] %}
+                {% endif %}
+                {% set probability = item.get('precipitation_probability') | float(default=none) %}
+                {% if probability is not none %}
+                  {% set ns.rain_probabilities = ns.rain_probabilities + [probability] %}
+                {% endif %}
+                {% set condition = item.get('condition', '') %}
+                {% if condition %}
+                  {% set ns.conditions = ns.conditions + [condition] %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+
+        {% if ns.temperatures | count == 0 %}
+          {{ {
+            'valid': false,
+            'pictograms': ['unknown'],
+            'date': start_at.strftime('%d.%m.%Y'),
+            'minimum': none,
+            'maximum': none,
+            'rainy': false,
+            'rain_probability': none
+          } }}
+        {% else %}
+          {% set minimum = ns.temperatures | min %}
+          {% set maximum = ns.temperatures | max %}
+          {% set rain_probability = ns.rain_probabilities | max if ns.rain_probabilities else none %}
+          {% set rainy_conditions = ['rainy', 'pouring', 'lightning-rainy', 'snowy-rainy'] %}
+          {% set snow_conditions = ['snowy', 'snowy-rainy', 'hail'] %}
+          {% set flags = namespace(rainy=false, snowy=false) %}
+          {% for condition in ns.conditions %}
+            {% if condition in rainy_conditions %}
+              {% set flags.rainy = true %}
+            {% endif %}
+            {% if condition in snow_conditions %}
+              {% set flags.snowy = true %}
+            {% endif %}
+          {% endfor %}
+          {% if rain_probability is not none and rain_probability >= rain_threshold | float %}
+            {% set flags.rainy = true %}
+          {% endif %}
+          {% set winter = minimum < winter_threshold | float or flags.snowy %}
+          {% set icons = namespace(values=[]) %}
+
+          {% set icons.values = icons.values + (['t_shirt'] if maximum >= t_shirt_threshold | float else ['long_sleeve']) %}
+          {% set icons.values = icons.values + (['shorts'] if minimum >= shorts_min_threshold | float and maximum >= shorts_max_threshold | float else ['trousers']) %}
+          {% if minimum < sweater_threshold | float %}
+            {% set icons.values = icons.values + ['sweater'] %}
+          {% endif %}
+          {% if winter %}
+            {% set icons.values = icons.values + ['winter_coat'] %}
+          {% elif not flags.rainy and minimum < light_jacket_threshold | float %}
+            {% set icons.values = icons.values + ['light_jacket'] %}
+          {% endif %}
+          {% if flags.rainy %}
+            {% set icons.values = icons.values + ['raincoat'] %}
+          {% endif %}
+          {% if winter %}
+            {% set icons.values = icons.values + ['beanie', 'gloves', 'winter_boots'] %}
+          {% elif flags.rainy and selected_rain_gear in ['coat_boots', 'coat_boots_umbrella'] %}
+            {% set icons.values = icons.values + ['rain_boots'] %}
+          {% else %}
+            {% set icons.values = icons.values + ['sneakers'] %}
+          {% endif %}
+          {% if flags.rainy and selected_rain_gear in ['coat_umbrella', 'coat_boots_umbrella'] %}
+            {% set icons.values = icons.values + ['umbrella'] %}
+          {% endif %}
+
+          {{ {
+            'valid': true,
+            'pictograms': icons.values,
+            'date': start_at.strftime('%d.%m.%Y'),
+            'minimum': minimum,
+            'maximum': maximum,
+            'rainy': flags.rainy,
+            'rain_probability': rain_probability
+          } }}
+        {% endif %}
+
+  - variables:
+      weather_subtitle: >-
+        {% if not recommendation.valid -%}
+          Keine Wetterdaten für dieses Zeitfenster
+        {%- elif show_summary -%}
+          {{ recommendation.date }} · {{ window_start[0:5] }}–{{ window_end[0:5] }} ·
+          {{- ' ' }}{{ recommendation.minimum | round(0) | int }}–{{ recommendation.maximum | round(0) | int }} °C
+          {%- if recommendation.rain_probability is not none %} · Regen: {{ recommendation.rain_probability | round(0) | int }} %
+          {%- elif recommendation.rainy %} · Regen
+          {%- endif %}
+        {%- endif %}
+
+  - action: pos_printer.print_pictograms
+    data:
+      config_entry_id: !input printer_config_entry
+      pictograms: "{{ recommendation.pictograms }}"
+      title: !input title
+      subtitle: "{{ weather_subtitle }}"
+      paper_width: !input paper_width
+      feed_after: !input feed_after

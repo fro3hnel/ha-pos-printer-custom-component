@@ -2,6 +2,8 @@ blueprint:
   name: Print dashboard text helper to POS printer
   description: Print the content of an input_text helper when an input_button is pressed.
   domain: automation
+  homeassistant:
+    min_version: 2024.10.0
   input:
     trigger_button:
       name: Trigger button
@@ -15,8 +17,17 @@ blueprint:
         entity:
           filter:
             - domain: input_text
+    printer_config_entry:
+      name: Printer
+      description: Select the configured POS-Printer Bridge entry.
+      default: ""
+      selector:
+        config_entry:
+          integration: pos_printer
     printer_name:
-      name: Printer name
+      name: Legacy printer name
+      description: Compatibility field for automations created with an older blueprint version.
+      default: ""
       selector:
         text:
     title:
@@ -62,23 +73,25 @@ blueprint:
           step: 1
 
 mode: queued
+max: 10
 max_exceeded: silent
 
 variables:
   message_entity: !input message_text
   clear_message: !input clear_after_print
 
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
     entity_id: !input trigger_button
 
-condition:
+conditions:
   - condition: template
     value_template: "{{ states(message_entity) | trim != '' }}"
 
-action:
-  - service: pos_printer.print_text
+actions:
+  - action: pos_printer.print_text
     data:
+      config_entry_id: !input printer_config_entry
       printer_name: !input printer_name
       title: !input title
       text: "{{ states(message_entity) }}"
@@ -86,13 +99,12 @@ action:
       body_bold: !input body_bold
       paper_width: !input paper_width
       feed_after: !input feed_after
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ clear_message }}"
-        sequence:
-          - service: input_text.set_value
-            target:
-              entity_id: !input message_text
-            data:
-              value: ""
+  - if:
+      - condition: template
+        value_template: "{{ clear_message }}"
+    then:
+      - action: input_text.set_value
+        target:
+          entity_id: !input message_text
+        data:
+          value: ""

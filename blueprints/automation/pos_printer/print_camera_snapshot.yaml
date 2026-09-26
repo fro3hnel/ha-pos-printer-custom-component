@@ -2,6 +2,8 @@ blueprint:
   name: Print camera snapshot to POS printer
   description: Print a camera snapshot when an input_button helper is pressed.
   domain: automation
+  homeassistant:
+    min_version: 2024.10.0
   input:
     trigger_button:
       name: Trigger button
@@ -15,8 +17,17 @@ blueprint:
         entity:
           filter:
             - domain: camera
+    printer_config_entry:
+      name: Printer
+      description: Select the configured POS-Printer Bridge entry.
+      default: ""
+      selector:
+        config_entry:
+          integration: pos_printer
     printer_name:
-      name: Printer name
+      name: Legacy printer name
+      description: Compatibility field for automations created with an older blueprint version.
+      default: ""
       selector:
         text:
     title:
@@ -57,15 +68,17 @@ blueprint:
           step: 1
 
 mode: queued
+max: 10
 max_exceeded: silent
 
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
     entity_id: !input trigger_button
 
-action:
-  - service: pos_printer.print_image
+actions:
+  - action: pos_printer.print_image
     data:
+      config_entry_id: !input printer_config_entry
       printer_name: !input printer_name
       title: !input title
       caption: !input caption
