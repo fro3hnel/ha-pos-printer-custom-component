@@ -17,7 +17,11 @@ from .const import (
 )
 from .models import PosPrinterConfigEntry, PrinterRuntimeData
 from .printer import async_register_services, setup_print_service, unload_print_service
-from .repairs import async_clear_entry_issues, async_validate_entry_issues
+from .repairs import (
+    async_clear_entry_issues,
+    async_validate_entry_issues,
+    async_validate_legacy_mqtt_discovery_issue,
+)
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
@@ -47,6 +51,7 @@ async def async_setup_entry(
     """Set up POS-Printer Bridge from a config entry."""
     await async_register_services(hass)
     async_validate_entry_issues(hass, entry)
+    async_validate_legacy_mqtt_discovery_issue(hass, entry)
 
     printer_name = entry.options.get(CONF_PRINTER_NAME, entry.data[CONF_PRINTER_NAME])
     runtime_data = await setup_print_service(

@@ -14,6 +14,7 @@ from custom_components.pos_printer.repairs import (
     async_clear_entry_issues,
     async_validate_bridge_version_issue,
     async_validate_entry_issues,
+    async_validate_legacy_mqtt_discovery_issue,
     async_validate_printer_name_issue,
 )
 
@@ -66,7 +67,14 @@ class FakeEntry:
 @pytest.mark.asyncio
 async def test_async_setup_and_entry_lifecycle(monkeypatch):
     """Setup and unload should register services, runtime data, and repairs."""
-    calls = {"register": 0, "setup": [], "unload": [], "issues": [], "cleared": []}
+    calls = {
+        "register": 0,
+        "setup": [],
+        "unload": [],
+        "issues": [],
+        "legacy_issues": [],
+        "cleared": [],
+    }
     hass = SimpleNamespace(config_entries=FakeConfigEntries())
     entry = FakeEntry("printer")
 
@@ -90,6 +98,11 @@ async def test_async_setup_and_entry_lifecycle(monkeypatch):
     )
     monkeypatch.setattr(
         integration,
+        "async_validate_legacy_mqtt_discovery_issue",
+        lambda hass, entry: calls["legacy_issues"].append(entry.entry_id),
+    )
+    monkeypatch.setattr(
+        integration,
         "async_clear_entry_issues",
         lambda hass, entry_id: calls["cleared"].append(entry_id),
     )
@@ -98,6 +111,7 @@ async def test_async_setup_and_entry_lifecycle(monkeypatch):
     assert await integration.async_setup_entry(hass, entry) is True
     assert entry.runtime_data.printer_name == "printer"
     assert calls["issues"] == ["entry-1"]
+    assert calls["legacy_issues"] == ["entry-1"]
     assert calls["setup"][-1]["paper_width"] == 80
     assert calls["setup"][-1]["feed_after"] == 4
 
@@ -176,6 +190,51 @@ def test_repairs_helpers_create_and_clear_issues(monkeypatch):
     async_clear_entry_issues(hass, entry.entry_id)
 
     assert ("invalid_printer_name_entry-1", "invalid_printer_name") in calls["create"]
-    assert ("outdated_bridge_version_entry-1", "outdated_bridge_version") in calls["create"]
+    assert (
+        "outdated_bridge_version_entry-1",
+        "outdated_bridge_version",
+    ) in calls["create"]
     assert "outdated_bridge_version_entry-1" in calls["delete"]
     assert "invalid_printer_name_entry-1" in calls["delete"]
+
+
+def test_legacy_mqtt_discovery_repair_detects_only_old_entities(monkeypatch):
+    """Only the old MQTT discovery unique IDs should raise a migration repair."""
+    calls = {"create": [], "delete": []}
+    entry = FakeEntry("kitchen")
+    hass = SimpleNamespace()
+    registry = SimpleNamespace(
+        entities={
+            "sensor.kitchen_queue": SimpleNamespace(
+                platform="mqtt", unique_id="kitchen_queue"
+            ),
+            "sensor.unrelated": SimpleNamespace(
+                platform="mqtt", unique_id="other_queue"
+            ),
+        }
+    )
+
+    monkeypatch.setattr(
+        "homeassistant.helpers.entity_registry.async_get",
+        lambda hass: registry,
+    )
+    monkeypatch.setattr(
+        "homeassistant.helpers.issue_registry.async_create_issue",
+        lambda hass, domain, issue_id, **kwargs: calls["create"].append(
+            (issue_id, kwargs["translation_key"])
+        ),
+    )
+    monkeypatch.setattr(
+        "homeassistant.helpers.issue_registry.async_delete_issue",
+        lambda hass, domain, issue_id: calls["delete"].append(issue_id),
+    )
+
+    async_validate_legacy_mqtt_discovery_issue(hass, entry)
+    assert (
+        "legacy_mqtt_discovery_entry-1",
+        "legacy_mqtt_discovery",
+    ) in calls["create"]
+
+    registry.entities = {"sensor.unrelated": registry.entities["sensor.unrelated"]}
+    async_validate_legacy_mqtt_discovery_issue(hass, entry)
+    assert "legacy_mqtt_discovery_entry-1" in calls["delete"]

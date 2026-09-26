@@ -17,7 +17,12 @@ async def test_diagnostics_redacts_sensitive_runtime_fields():
         print_topic="print/pos/kitchen_printer/job",
         status_topic="print/pos/kitchen_printer/ack",
         log_topic="print/pos/kitchen_printer/log",
-        last_status={"job_id": "abc", "detail": "paper jam", "status": "error"},
+        last_status={
+            "job_id": "abc",
+            "detail": "paper jam",
+            "status": "error",
+            "last_job": {"id": "abc"},
+        },
         last_log={"message": "something happened", "file": "/tmp/x.py", "line": 10},
     )
     hass = SimpleNamespace(data={"pos_printer": DomainData(printers={"kitchen_printer": runtime})})
@@ -37,6 +42,7 @@ async def test_diagnostics_redacts_sensitive_runtime_fields():
     assert diagnostics["runtime"]["printer_name"] == "**REDACTED**"
     assert diagnostics["runtime"]["topics"]["print"] == "**REDACTED**"
     assert diagnostics["runtime"]["last_status"]["job_id"] == "**REDACTED**"
+    assert diagnostics["runtime"]["last_status"]["last_job"]["id"] == "**REDACTED**"
     assert diagnostics["runtime"]["last_log"]["message"] == "**REDACTED**"
     assert diagnostics["registered_printers_count"] == 1
 

@@ -54,6 +54,7 @@
         "last_job_detail": {"name": "Detail des letzten Druckauftrags"},
         "last_status_update": {"name": "Letzte Statusmeldung"},
         "queue_length": {"name": "Warteschlangenlänge"},
+        "printer_status": {"name": "Druckerstatus"},
         "bridge_version": {"name": "Bridge-Version"},
         "last_bridge_log": {"name": "Letzte Bridge-Logmeldung"},
         "successful_jobs": {"name": "Erfolgreiche Druckaufträge"}
@@ -74,6 +75,10 @@
       "outdated_bridge_version": {
         "title": "Bridge-Software ist veraltet",
         "description": "Die Bridge für `{printer_name}` meldet Version `{bridge_version}`. Aktualisiere die Raspberry-Pi-Bridge auf mindestens `{minimum_version}`, damit sie zur installierten Home-Assistant-Integration passt."
+      },
+      "legacy_mqtt_discovery": {
+        "title": "Alte MQTT-Drucker-Entities sind noch vorhanden",
+        "description": "Für {printer_name} sind noch MQTT-Discovery-Entities einer älteren Bridge vorhanden. Aktualisiere und starte die Bridge neu, damit sie die veraltete retained Discovery-Konfiguration entfernt. Falls Home Assistant danach noch ein verwaistes MQTT-Gerät zeigt, entferne es manuell."
       }
     },
     "exceptions": {

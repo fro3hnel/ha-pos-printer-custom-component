@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from packaging.version import InvalidVersion, Version
 
@@ -12,6 +13,7 @@ from .validation import is_valid_printer_name
 
 ISSUE_INVALID_PRINTER_NAME = "invalid_printer_name"
 ISSUE_OUTDATED_BRIDGE_VERSION = "outdated_bridge_version"
+ISSUE_LEGACY_MQTT_DISCOVERY = "legacy_mqtt_discovery"
 _CONFIGURATION_URL = (
     "https://github.com/fro3hnel/ha-pos-printer-custom-component#home-assistant-setup"
 )
@@ -26,6 +28,10 @@ def _invalid_printer_issue_id(entry_id: str) -> str:
 
 def _outdated_bridge_issue_id(entry_id: str) -> str:
     return f"{ISSUE_OUTDATED_BRIDGE_VERSION}_{entry_id}"
+
+
+def _legacy_mqtt_discovery_issue_id(entry_id: str) -> str:
+    return f"{ISSUE_LEGACY_MQTT_DISCOVERY}_{entry_id}"
 
 
 def async_validate_printer_name_issue(
@@ -93,6 +99,36 @@ def async_validate_bridge_version_issue(
     )
 
 
+def async_validate_legacy_mqtt_discovery_issue(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Report stale entities from the bridge's pre-native MQTT discovery."""
+    printer_name = entry.options.get(CONF_PRINTER_NAME, entry.data[CONF_PRINTER_NAME])
+    legacy_unique_ids = {f"{printer_name}_queue", f"{printer_name}_status"}
+    registry = er.async_get(hass)
+    has_legacy_entity = any(
+        registry_entry.platform == "mqtt"
+        and registry_entry.unique_id in legacy_unique_ids
+        for registry_entry in registry.entities.values()
+    )
+    issue_id = _legacy_mqtt_discovery_issue_id(entry.entry_id)
+    if not has_legacy_entity:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_LEGACY_MQTT_DISCOVERY,
+        translation_placeholders={"printer_name": printer_name},
+        learn_more_url=_TROUBLESHOOTING_URL,
+    )
+
+
 def async_validate_entry_issues(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Validate all entry-level repair issues."""
     printer_name = entry.options.get(CONF_PRINTER_NAME, entry.data[CONF_PRINTER_NAME])
@@ -103,3 +139,4 @@ def async_clear_entry_issues(hass: HomeAssistant, entry_id: str) -> None:
     """Clear all repair issues for a config entry."""
     ir.async_delete_issue(hass, DOMAIN, _invalid_printer_issue_id(entry_id))
     ir.async_delete_issue(hass, DOMAIN, _outdated_bridge_issue_id(entry_id))
+    ir.async_delete_issue(hass, DOMAIN, _legacy_mqtt_discovery_issue_id(entry_id))
