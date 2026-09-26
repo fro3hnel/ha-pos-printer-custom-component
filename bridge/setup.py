@@ -21,7 +21,7 @@ setup(
     version=BRIDGE_VERSION,
     description="Home-Assistant POS-Printer Bridge for Bixolon printers",
     author="Nico Froehnel",
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     py_modules=[
         "printer_bridge",
         "bridge_version",

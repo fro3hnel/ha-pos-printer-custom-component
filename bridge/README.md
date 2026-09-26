@@ -1,6 +1,7 @@
 # POS-Printer Bridge for Home Assistant
 
-Python service for Raspberry Pi Zero W that consumes MQTT print jobs, buffers them in Redis and prints them on a Bixolon POS printer via the native C SDK.
+Python service for Raspberry Pi Zero W that consumes MQTT print jobs, buffers
+them in Redis, and prints them on a Bixolon POS printer via the native C SDK.
 
 The manual install path is aligned with the `pi-gen` image:
 
@@ -12,15 +13,19 @@ The manual install path is aligned with the `pi-gen` image:
 
 ## Features
 
-- MQTT print jobs with ACK and heartbeat topics
-- Redis-backed priority spool
+- Per-printer MQTT jobs with queued, duplicate, printing, and final acknowledgements
+- Retained availability with an MQTT last will
+- Redis-backed priority spool with atomic 24-hour job-ID deduplication and a
+  persistent successful-job counter
 - 53 mm and 80 mm paper width support
-- Home Assistant discovery payloads for queue and status sensors
+- Retained discovery for the Home Assistant custom integration
+- Expiry checks before physical output
 - Bixolon USB, Bluetooth and LAN port strings via the vendor SDK
 
 ## Hardware
 
-- Host: Raspberry Pi Zero W or similar Linux system
+- Host: Raspberry Pi Zero W or similar Linux system with Python 3.10 or newer
+- Recommended OS: Raspberry Pi OS Bookworm or newer
 - Printer: Bixolon POS printer with `libBxlPosAPI.so.1`
 - Width: 53 mm or 80 mm
 
@@ -106,7 +111,8 @@ sudo /opt/pos-printer-bridge/uninstall.sh --keep-udev
 sudo /opt/pos-printer-bridge/uninstall.sh --yes
 ```
 
-The uninstall script removes the bridge service, runtime files and optionally the configuration plus service user. Installed OS packages are left untouched.
+The uninstall script removes the bridge service and runtime files, and optionally
+the configuration and service user. Installed OS packages are left untouched.
 
 ## Manual Run
 
@@ -117,7 +123,8 @@ cd /opt/pos-printer-bridge
 sudo -u posprinter /usr/bin/python3 printer_bridge.py
 ```
 
-For local development from the repository checkout, create `bridge/.env` manually or copy the installed configuration:
+For local development from the repository checkout, create `bridge/.env`
+manually or copy the installed configuration:
 
 ```bash
 cp /etc/default/pos-printer-bridge bridge/.env
@@ -129,6 +136,28 @@ python3 bridge/printer_bridge.py
 - Publish a job to `print/pos/<printer_name>/job`
 - Subscribe for acknowledgements on `print/pos/<printer_name>/ack`
 - Subscribe for bridge logs on `print/pos/<printer_name>/log`
+- Subscribe for retained availability on `print/pos/<printer_name>/availability`
+- The bridge announces itself on `pos_printer/discovery/<printer_name>`
+
+The custom integration creates the Home Assistant device and entities. Current
+bridge versions remove the old retained MQTT sensor discovery topics to avoid
+duplicate devices after an upgrade.
+
+The optional `print/pos/<printer_name>/restart` command restarts only the bridge
+service process. Bridge and Pi OS updates are intentionally performed outside
+MQTT by updating the checkout and rerunning the installer or rebuilding the Pi
+image.
+
+Acknowledgements use `queued` when Redis accepts the job, `duplicate` when the
+same job ID was already accepted for this printer within 24 hours, `printing`
+when the worker starts it, and one of `success`, `partial-error`, `error`, or
+`expired` as the final state. A duplicate acknowledgement also contains
+`"duplicate": true` and never creates another queue entry. `expires` is checked
+immediately before printing.
+
+`job_id` must be a non-empty string with at most 128 characters. Use a new ID
+for every intended physical print. Reuse an ID only to redeliver the same job;
+different content with the same ID is deliberately treated as a duplicate.
 
 Example job:
 

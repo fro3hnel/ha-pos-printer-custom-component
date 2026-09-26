@@ -2,7 +2,9 @@
 import argparse
 import base64
 import io
+
 from PIL import Image
+
 
 def main():
     parser = argparse.ArgumentParser(

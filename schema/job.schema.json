@@ -13,7 +13,9 @@
     "job_id": {
       "type": "string",
       "minLength": 1,
-      "$comment": "Unique identifier – echoed back in status topic."
+      "maxLength": 128,
+      "pattern": ".*\\S.*",
+      "$comment": "Unique identifier echoed back in the status topic. Use a new ID for each intended physical print. Reusing an ID for the same printer within 24 hours is acknowledged as a duplicate and is not queued again."
     },
     "priority": {
       "type": "integer",

@@ -7,7 +7,11 @@ from pathlib import Path
 from bridge.device_setup_models import BridgeSettings, SetupConfig, WifiSettings
 from bridge.device_setup_network import parse_wifi_scan_output
 from bridge.device_setup_service import apply_configuration, parse_setup_form
-from bridge.device_setup_store import load_setup_config, render_bridge_env, save_setup_config
+from bridge.device_setup_store import (
+    load_setup_config,
+    render_bridge_env,
+    save_setup_config,
+)
 
 
 def test_render_bridge_env_quotes_sensitive_values() -> None:

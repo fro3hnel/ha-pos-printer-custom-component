@@ -6,12 +6,13 @@ priority spool and prints them on a Bixolon POS printer via the vendor C‑libra
 
 Features
 --------
-* MQTT Topics       : ``pos/print``  (jobs)  |  ``pos/print/status`` (ack + heartbeat)
-* HA Discovery      : sensor + binary_sensor published on startup
+* MQTT Topics       : per-printer job, acknowledgement, log and availability topics
+* HA Discovery      : retained bridge announcement for the custom integration
 * Redis Spool       : 10 lists ``print_queue:0`` … ``print_queue:9`` (0 = highest prio)
+* Status Lifecycle  : queued, printing and a correlated final acknowledgement
 * Printer Width     : 80 mm default, overridable per job (field ``paper_width``)
 * UTF‑8             : ``SetTextEncoding(ENCODING_ASCII)``
-* No automatic retries – on error an error ACK is sent, remaining items keep printing.
+* No automatic retries – on error an error ACK is sent, remaining items keep printing.
 
 Environment (.env)
 ------------------
@@ -32,40 +33,40 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import io
 import json
 import logging
 import os
-import queue
 import signal
-import subprocess
-import sys
 import tempfile
 import threading
 import time
-from urllib.parse import unquote_to_bytes, urlparse
-from urllib.request import Request, urlopen
 from ctypes import (
     CDLL,
     POINTER,
     RTLD_GLOBAL,
     Structure,
     byref,
-    c_bool,
     c_char_p,
     c_int,
     c_ubyte,
     c_uint,
 )
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, ClassVar, Dict, List
+from dataclasses import dataclass
+from typing import Any, Dict
+from urllib.parse import unquote_to_bytes, urlparse
+from urllib.request import Request, urlopen
 
 import paho.mqtt.client as mqtt
 import redis
-from bridge_version import BRIDGE_VERSION
 from dotenv import load_dotenv
 from PIL import Image
+
+try:
+    from .bridge_version import BRIDGE_VERSION
+except ImportError:  # pragma: no cover - direct script execution on the bridge
+    from bridge_version import BRIDGE_VERSION
 
 try:
     import psutil  # type: ignore
@@ -73,7 +74,7 @@ except ImportError:
     psutil = None  # pragma: no cover
 
 load_dotenv()
-REPO_URL = "https://github.com/fro3hnel/ha-pos-printer-custom-component.git"
+
 
 @dataclass(slots=True)
 class Config:
@@ -95,6 +96,9 @@ class Config:
 CFG = Config()
 logging.basicConfig(level=getattr(logging, CFG.log_level.upper()))
 LOGGER = logging.getLogger("printer_bridge")
+
+JOB_ID_DEDUPLICATION_TTL = 24 * 60 * 60
+MAX_JOB_ID_LENGTH = 128
 
 
 def _decode_data_uri(content: str) -> bytes:
@@ -170,14 +174,44 @@ class MQTTLogHandler(logging.Handler):
 class RedisSpool:
     """Priority spool backed by 10 Redis lists."""
 
-    def __init__(self, url: str):
-        self.redis = redis.Redis.from_url(url, decode_responses=True)
-        self._lock = threading.Lock()
+    _ATOMIC_ENQUEUE_SCRIPT = """
+    if redis.call('SET', KEYS[1], '1', 'NX', 'EX', ARGV[1]) then
+        redis.call('RPUSH', KEYS[2], ARGV[2])
+        return 1
+    end
+    return 0
+    """
 
-    def push(self, job: dict[str, Any], priority: int) -> None:
+    def __init__(self, url: str, printer_name: str | None = None):
+        self.redis = redis.Redis.from_url(url, decode_responses=True)
+        self.printer_name = printer_name or CFG.printer_name
+
+    def dedupe_key(self, job_id: str) -> str:
+        """Return a non-reversible, per-printer deduplication marker key."""
+        job_id_hash = hashlib.sha256(job_id.encode("utf-8")).hexdigest()
+        return f"print_dedupe:{self.printer_name}:{job_id_hash}"
+
+    def push(self, job: dict[str, Any], priority: int) -> bool:
+        """Atomically deduplicate and enqueue a job.
+
+        Return ``True`` when Redis accepted the job and ``False`` when its ID was
+        already accepted for this printer during the deduplication window.
+        """
         prio = max(0, min(priority, 9))
-        self.redis.rpush(f"print_queue:{prio}", json.dumps(job))
-        LOGGER.debug("Job pushed to priority %s", prio)
+        job_id = str(job["job_id"])
+        accepted = self.redis.eval(
+            self._ATOMIC_ENQUEUE_SCRIPT,
+            2,
+            self.dedupe_key(job_id),
+            f"print_queue:{prio}",
+            JOB_ID_DEDUPLICATION_TTL,
+            json.dumps(job),
+        )
+        if accepted:
+            LOGGER.debug("Job %s pushed to priority %s", job_id, prio)
+        else:
+            LOGGER.info("Duplicate job %s ignored for %s", job_id, self.printer_name)
+        return bool(accepted)
 
     def pop(self, timeout: int = 5) -> dict[str, Any] | None:
         """Pop job with highest priority available – blocking BRPOP."""
@@ -190,6 +224,28 @@ class RedisSpool:
 
     def length(self) -> int:
         return sum(self.redis.llen(f"print_queue:{i}") for i in range(10))
+
+    def record_success(self) -> int:
+        """Persist and return the successful-job count for this printer."""
+        return int(
+            self.redis.incr(f"print_stats:{self.printer_name}:successful_jobs")
+        )
+
+    def successful_jobs(self) -> int:
+        """Return the persisted successful-job count."""
+        value = self.redis.get(
+            f"print_stats:{self.printer_name}:successful_jobs"
+        )
+        return int(value or 0)
+
+
+def _job_is_expired(job: dict[str, Any], now: float | None = None) -> bool:
+    """Return whether a queued job exceeded its optional lifetime."""
+    queued_at = float(job.pop("_queued_at", time.time()))
+    expires = job.get("expires")
+    if expires is None:
+        return False
+    return (now if now is not None else time.time()) >= queued_at + int(expires)
 
 class _BarcodeInfo(Structure):
     _fields_ = [
@@ -436,18 +492,22 @@ class MQTTBridge:
     SUB_TOPIC = f"print/pos/{CFG.printer_name}/job"
     PUB_TOPIC = f"print/pos/{CFG.printer_name}/ack"
     LOG_TOPIC = f"print/pos/{CFG.printer_name}/log"
-    UPDATE_TOPIC = f"print/pos/{CFG.printer_name}/update"
-    PI_UPDATE_TOPIC = f"print/pos/{CFG.printer_name}/pi_update"
+    AVAILABILITY_TOPIC = f"print/pos/{CFG.printer_name}/availability"
+    DISCOVERY_TOPIC = f"pos_printer/discovery/{CFG.printer_name}"
     RESTART_TOPIC = f"print/pos/{CFG.printer_name}/restart"
 
     def __init__(self, printer: BixolonPrinter, spool: RedisSpool):
         self.printer, self.spool = printer, spool
         self.client = mqtt.Client()
         self.client.username_pw_set(CFG.mqtt_user, CFG.mqtt_pass)
+        self.client.will_set(
+            self.AVAILABILITY_TOPIC,
+            payload="offline",
+            qos=1,
+            retain=True,
+        )
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
-        self.client.message_callback_add(self.UPDATE_TOPIC, self._on_update)
-        self.client.message_callback_add(self.PI_UPDATE_TOPIC, self._on_pi_update)
         self.client.message_callback_add(self.RESTART_TOPIC, self._on_restart)
         self._stop = threading.Event()
         self._log_handler = MQTTLogHandler(self.client, self.LOG_TOPIC, CFG.printer_name)
@@ -463,6 +523,15 @@ class MQTTBridge:
 
     def stop(self):
         self._stop.set()
+        publish_info = self.client.publish(
+            self.AVAILABILITY_TOPIC,
+            payload="offline",
+            qos=1,
+            retain=True,
+        )
+        wait_for_publish = getattr(publish_info, "wait_for_publish", None)
+        if wait_for_publish is not None:
+            wait_for_publish(timeout=2)
         self.client.loop_stop()
         self.client.disconnect()
         LOGGER.removeHandler(self._log_handler)
@@ -472,16 +541,18 @@ class MQTTBridge:
     def _on_connect(self, cli, _userdata, _flags, rc):  # noqa: D401,N802
         if rc == 0:
             cli.subscribe(self.SUB_TOPIC, qos=1)
-            cli.subscribe(self.UPDATE_TOPIC, qos=1)
-            cli.subscribe(self.PI_UPDATE_TOPIC, qos=1)
             cli.subscribe(self.RESTART_TOPIC, qos=1)
+            cli.publish(
+                self.AVAILABILITY_TOPIC,
+                payload="online",
+                qos=1,
+                retain=True,
+            )
             self._publish_bridge_announcement()
-            self._publish_discovery()
+            self._remove_legacy_discovery()
             LOGGER.info(
-                "MQTT connected; subscribed to %s, %s, %s and %s",
+                "MQTT connected; subscribed to %s and %s",
                 self.SUB_TOPIC,
-                self.UPDATE_TOPIC,
-                self.PI_UPDATE_TOPIC,
                 self.RESTART_TOPIC,
             )
         else:
@@ -494,9 +565,28 @@ class MQTTBridge:
                 raise TypeError("job payload must be a JSON object")
             if not isinstance(payload.get("message"), list):
                 raise TypeError("job payload requires a message list")
+            job_id = payload.get("job_id")
+            if not isinstance(job_id, str):
+                raise TypeError("job_id must be a string")
+            if not job_id.strip():
+                raise ValueError("job_id must not be empty")
+            if len(job_id) > MAX_JOB_ID_LENGTH:
+                raise ValueError(
+                    f"job_id must not exceed {MAX_JOB_ID_LENGTH} characters"
+                )
             priority = int(payload.get("priority", 5))
-            self.spool.push(payload, priority)
-            LOGGER.debug("Job queued: %s", payload.get("job_id"))
+            payload["_queued_at"] = time.time()
+            if self.spool.push(payload, priority):
+                self._publish_ack(job_id, "queued", "")
+                LOGGER.debug("Job queued: %s", job_id)
+            else:
+                self._publish_ack(
+                    job_id,
+                    "duplicate",
+                    "Job ID was already accepted for this printer within the "
+                    "24-hour deduplication window; the job was not queued again.",
+                    duplicate=True,
+                )
         except json.JSONDecodeError as exc:
             LOGGER.error("Invalid JSON on %s: %s", msg.topic, exc, exc_info=True)
         except Exception as exc:  # noqa: BLE001
@@ -504,80 +594,10 @@ class MQTTBridge:
                 "Invalid job payload structure on %s: %s", msg.topic, exc, exc_info=True
             )
 
-    def _on_update(self, _cli, _userdata, msg):  # noqa: D401
-        """Handle update commands."""
-        try:
-            payload = json.loads(msg.payload) if msg.payload else {}
-            version = str(payload.get("version", "")).strip()
-            threading.Thread(
-                target=self._perform_bridge_update,
-                args=(version,),
-                daemon=True,
-            ).start()
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.error("Failed to process update message: %s", exc, exc_info=True)
-
-    def _perform_bridge_update(self, version: str) -> None:
-        """Install a bridge update and reboot the Pi if successful."""
-        if not version:
-            LOGGER.error("Update message missing version")
-            return
-        repo = f"git+{REPO_URL}@{version}#subdirectory=bridge"
-        cmd = [sys.executable, "-m", "pip", "install", "--upgrade", repo]
-        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-        if result.returncode != 0:
-            LOGGER.error(
-                "Bridge update failed (rc=%s): %s",
-                result.returncode,
-                (result.stderr or result.stdout).strip(),
-            )
-            return
-        LOGGER.info("Update command received for version %s", version)
-        self._restart()
-
-    def _on_pi_update(self, _cli, _userdata, _msg):  # noqa: D401
-        """Handle Raspberry Pi software update commands."""
-        LOGGER.info("Pi software update command received")
-        threading.Thread(target=self._perform_pi_update, daemon=True).start()
-
-    def _perform_pi_update(self) -> None:
-        """Run apt update/upgrade to update Raspberry Pi software."""
-        env = dict(os.environ)
-        env["DEBIAN_FRONTEND"] = "noninteractive"
-        commands = [
-            ["sudo", "apt-get", "update"],
-            ["sudo", "apt-get", "upgrade", "-y"],
-            ["sudo", "apt-get", "autoremove", "-y"],
-        ]
-        for cmd in commands:
-            result = subprocess.run(
-                cmd,
-                check=False,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-            if result.returncode != 0:
-                LOGGER.error(
-                    "Pi software update command failed (%s, rc=%s): %s",
-                    " ".join(cmd),
-                    result.returncode,
-                    (result.stderr or result.stdout).strip(),
-                )
-                return
-        LOGGER.info("Pi software update completed successfully")
-
     def _on_restart(self, _cli, _userdata, _msg):  # noqa: D401
-        """Handle restart commands."""
-        LOGGER.info("Restart command received – rebooting")
-        self._restart()
-
-    def _restart(self) -> None:
-        """Execute system reboot."""
-        try:
-            subprocess.run(["sudo", "reboot"], check=False)
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.error("Failed to execute reboot: %s", exc, exc_info=True)
+        """Restart only the bridge process; systemd brings it back up."""
+        LOGGER.info("Restart command received; restarting bridge service process")
+        os._exit(1)
 
     # ---------------- worker ----------------
     def _worker_loop(self):
@@ -587,9 +607,15 @@ class MQTTBridge:
                 continue
             job_id = job.get("job_id", f"ts{int(time.time()*1000)}")
             try:
+                if _job_is_expired(job):
+                    self._publish_ack(job_id, "expired", "Job expired before printing")
+                    continue
+                self._publish_ack(job_id, "printing", "")
                 failures = self.printer.execute_job(job)
                 status = "partial-error" if failures else "success"
                 detail = ", ".join(failures)
+                if not failures:
+                    self.spool.record_success()
             except Exception as exc:  # noqa: BLE001
                 status, detail = "error", str(exc)
             self._publish_ack(job_id, status, detail)
@@ -602,13 +628,22 @@ class MQTTBridge:
             time.sleep(CFG.heartbeat_interval)
 
     # ---------------- helpers ----------------
-    def _publish_ack(self, job_id: str, status: str, detail: str):
+    def _publish_ack(
+        self,
+        job_id: str,
+        status: str,
+        detail: str,
+        *,
+        duplicate: bool = False,
+    ):
         payload = {
             "job_id": job_id,
             "status": status,
             "detail": detail,
+            "duplicate": duplicate,
             "queue_len": self.spool.length(),
             "printer_status": self.printer.get_status(),
+            "successful_jobs": self.spool.successful_jobs(),
             "timestamp": int(time.time()),
         }
         self.client.publish(self.PUB_TOPIC, json.dumps(payload), qos=1)
@@ -618,6 +653,7 @@ class MQTTBridge:
             "timestamp": int(time.time()),
             "queue_len": self.spool.length(),
             "printer_status": self.printer.get_status(),
+            "successful_jobs": self.spool.successful_jobs(),
             "version": BRIDGE_VERSION,
         }
         if psutil:
@@ -631,37 +667,27 @@ class MQTTBridge:
         self.client.publish(self.PUB_TOPIC, json.dumps({"heartbeat": info}), qos=0, retain=False)
 
     def _publish_bridge_announcement(self):
-        payload = {"printer_name": CFG.printer_name}
-        self.client.publish("pos_printer/discovery", json.dumps(payload), qos=1, retain=True)
+        payload = {
+            "printer_name": CFG.printer_name,
+            "version": BRIDGE_VERSION,
+            "heartbeat_interval": CFG.heartbeat_interval,
+        }
+        self.client.publish(
+            self.DISCOVERY_TOPIC,
+            json.dumps(payload),
+            qos=1,
+            retain=True,
+        )
 
-    def _publish_discovery(self):
-        base = f"homeassistant/sensor/{CFG.printer_name}"
-        device = {
-            "identifiers": [CFG.printer_name],
-            "name": CFG.printer_name,
-            "manufacturer": "Bixolon",
-            "model": "POS",
-        }
-        sensors = {
-            "queue": {
-                "unique_id": f"{CFG.printer_name}_queue",
-                "state_topic": self.PUB_TOPIC,
-                "name": f"{CFG.printer_name} Queue Length",
-                "unit_of_measurement": "jobs",
-                "value_template": "{{ value_json.queue_len }}",
-                "device": device,
-            },
-            "status": {
-                "unique_id": f"{CFG.printer_name}_status",
-                "state_topic": self.PUB_TOPIC,
-                "name": f"{CFG.printer_name} Status",
-                "value_template": "{{ value_json.status or value_json.heartbeat.printer_status }}",
-                "device": device,
-            },
-        }
-        for s, cfg in sensors.items():
-            topic = f"{base}/{s}/config"
-            self.client.publish(topic, json.dumps(cfg), qos=1, retain=True)
+    def _remove_legacy_discovery(self):
+        """Remove retained discovery payloads that created duplicate MQTT entities."""
+        topics = (
+            "pos_printer/discovery",
+            f"homeassistant/sensor/{CFG.printer_name}/queue/config",
+            f"homeassistant/sensor/{CFG.printer_name}/status/config",
+        )
+        for topic in topics:
+            self.client.publish(topic, payload="", qos=1, retain=True)
 
 # --------------------------- 5. Main ------------------------------------
 

@@ -69,6 +69,13 @@ install_packages() {
         udev
 }
 
+require_python_version() {
+    if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+        printf 'Python 3.10 or newer is required; use Raspberry Pi OS Bookworm or newer.\n' >&2
+        exit 1
+    fi
+}
+
 sync_runtime() {
     log "Syncing bridge runtime to ${TARGET_DIR}"
     sudo install -d -m 0755 "${TARGET_DIR}"
@@ -167,6 +174,7 @@ main() {
 
     log "Installing POS Printer Bridge into ${TARGET_DIR}"
     install_packages
+    require_python_version
     ensure_group
     ensure_user
     sync_runtime

@@ -6,7 +6,12 @@ import socket
 import subprocess
 
 try:
-    from .device_setup_models import DeviceStatus, SetupConfig, WifiNetwork, WifiSettings
+    from .device_setup_models import (
+        DeviceStatus,
+        SetupConfig,
+        WifiNetwork,
+        WifiSettings,
+    )
 except ImportError:  # pragma: no cover - script execution on target image
     from device_setup_models import DeviceStatus, SetupConfig, WifiNetwork, WifiSettings
 

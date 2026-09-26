@@ -9,11 +9,21 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 try:
-    from .device_setup_models import ApplyResult, BridgeSettings, SetupConfig, WifiSettings
+    from .device_setup_models import (
+        ApplyResult,
+        BridgeSettings,
+        SetupConfig,
+        WifiSettings,
+    )
     from .device_setup_network import NetworkManager
     from .device_setup_store import DEFAULT_BRIDGE_ENV_PATH, write_bridge_env
 except ImportError:  # pragma: no cover - script execution on target image
-    from device_setup_models import ApplyResult, BridgeSettings, SetupConfig, WifiSettings
+    from device_setup_models import (
+        ApplyResult,
+        BridgeSettings,
+        SetupConfig,
+        WifiSettings,
+    )
     from device_setup_network import NetworkManager
     from device_setup_store import DEFAULT_BRIDGE_ENV_PATH, write_bridge_env
 
