@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from datetime import date, datetime
 from typing import Any, Mapping
@@ -12,6 +13,7 @@ import voluptuous as vol
 from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     AVAILABILITY_ONLINE,
@@ -57,6 +59,14 @@ _BARCODE_TYPES = (
 )
 _TEXT_FONTS = ("A", "B", "C")
 _IMAGE_ROTATIONS = (0, 90, 180, 270)
+_STATUS_SCHEMA_VERSION = 1
+_MIN_HEARTBEAT_TIMEOUT_SECONDS = 90
+_HEARTBEAT_TIMEOUT_MULTIPLIER = 2.5
+
+
+def _monotonic() -> float:
+    """Return the monotonic clock used for heartbeat expiry."""
+    return time.monotonic()
 
 
 def _validate_job_id(value: Any) -> str:
@@ -812,7 +822,8 @@ async def setup_print_service(
         entry_id=config.get("entry_id"),
         printer_name=printer_name,
         print_topic=f"print/pos/{printer_name}/job",
-        status_topic=f"print/pos/{printer_name}/ack",
+        ack_topic=f"print/pos/{printer_name}/ack",
+        status_topic=f"print/pos/{printer_name}/status",
         log_topic=f"print/pos/{printer_name}/log",
         availability_topic=f"print/pos/{printer_name}/availability",
         default_paper_width=int(config.get(CONF_PAPER_WIDTH, DEFAULT_PAPER_WIDTH)),
@@ -821,12 +832,16 @@ async def setup_print_service(
 
     if printer_name in domain_data.printers:
         existing = domain_data.printers.pop(printer_name)
+        if existing.unsub_ack is not None:
+            existing.unsub_ack()
         if existing.unsub_status is not None:
             existing.unsub_status()
         if existing.unsub_log is not None:
             existing.unsub_log()
         if existing.unsub_availability is not None:
             existing.unsub_availability()
+        if existing.unsub_heartbeat_timeout is not None:
+            existing.unsub_heartbeat_timeout()
 
     @callback
     def update_availability(available: bool) -> None:
@@ -834,6 +849,7 @@ async def setup_print_service(
         changed = runtime_data.available != available
         was_known = runtime_data.availability_known
         runtime_data.available = available
+        runtime_data.online = available
         runtime_data.availability_known = True
 
         if changed or not was_known:
@@ -860,42 +876,175 @@ async def setup_print_service(
         update_availability(str(raw_payload).strip().lower() == AVAILABILITY_ONLINE)
 
     @callback
-    def handle_status(msg: Any) -> None:
-        """Forward bridge status payloads onto the Home Assistant bus."""
+    def schedule_heartbeat_timeout() -> None:
+        """Mark an otherwise connected bridge offline after missed heartbeats."""
+        if runtime_data.unsub_heartbeat_timeout is not None:
+            runtime_data.unsub_heartbeat_timeout()
+            runtime_data.unsub_heartbeat_timeout = None
+
+        if getattr(hass, "loop", None) is None:
+            return
+
+        timeout = max(
+            _MIN_HEARTBEAT_TIMEOUT_SECONDS,
+            runtime_data.heartbeat_interval * _HEARTBEAT_TIMEOUT_MULTIPLIER,
+        )
+        scheduled_at = runtime_data.last_status_at
+
+        @callback
+        def handle_timeout(_now: datetime) -> None:
+            """Apply the timeout only if no newer status was received."""
+            if scheduled_at is None or runtime_data.last_status_at != scheduled_at:
+                return
+            if _monotonic() - scheduled_at >= timeout:
+                _LOGGER.warning(
+                    "POS printer bridge %s missed its heartbeat timeout", printer_name
+                )
+                update_availability(False)
+                return
+            schedule_heartbeat_timeout()
+
+        runtime_data.unsub_heartbeat_timeout = async_call_later(
+            hass,
+            timeout,
+            handle_timeout,
+        )
+
+    def normalize_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        """Normalize legacy acknowledgements and status v1 into one event shape."""
+        normalized = dict(payload)
+        schema_version = normalized.get("schema_version")
+        if schema_version is not None and schema_version != _STATUS_SCHEMA_VERSION:
+            raise ValueError(f"Unsupported status schema version: {schema_version!r}")
+
+        if schema_version == _STATUS_SCHEMA_VERSION:
+            required_fields = {
+                "printer_name",
+                "bridge_version",
+                "online",
+                "timestamp",
+                "heartbeat_interval",
+                "queue_length",
+                "printer_status",
+                "last_job",
+            }
+            missing_fields = required_fields.difference(normalized)
+            if missing_fields:
+                raise ValueError(
+                    "Status payload is missing fields: "
+                    f"{', '.join(sorted(missing_fields))}"
+                )
+            if not isinstance(normalized["printer_name"], str):
+                raise ValueError("Status printer_name must be a string")
+            if not isinstance(normalized["bridge_version"], str):
+                raise ValueError("Status bridge_version must be a string")
+            if not isinstance(normalized["online"], bool):
+                raise ValueError("Status online must be a boolean")
+            if not isinstance(normalized["timestamp"], int):
+                raise ValueError("Status timestamp must be an integer")
+            if not isinstance(normalized["heartbeat_interval"], int) or (
+                normalized["heartbeat_interval"] < 1
+            ):
+                raise ValueError("Status heartbeat_interval must be a positive integer")
+            if not isinstance(normalized["queue_length"], int) or (
+                normalized["queue_length"] < 0
+            ):
+                raise ValueError("Status queue_length must be a non-negative integer")
+            if not isinstance(normalized["printer_status"], (int, str)):
+                raise ValueError("Status printer_status must be an integer or string")
+
+            last_job = normalized["last_job"]
+            if last_job is not None:
+                if not isinstance(last_job, dict):
+                    raise ValueError("Status last_job must be an object or null")
+                required_job_fields = {"id", "status", "detail", "duplicate", "timestamp"}
+                if missing_job_fields := required_job_fields.difference(last_job):
+                    raise ValueError(
+                        "Status last_job is missing fields: "
+                        f"{', '.join(sorted(missing_job_fields))}"
+                    )
+                if not isinstance(last_job["id"], str):
+                    raise ValueError("Status last_job.id must be a string")
+                if not isinstance(last_job["status"], str):
+                    raise ValueError("Status last_job.status must be a string")
+                if not isinstance(last_job["detail"], str):
+                    raise ValueError("Status last_job.detail must be a string")
+                if not isinstance(last_job["duplicate"], bool):
+                    raise ValueError("Status last_job.duplicate must be a boolean")
+                if not isinstance(last_job["timestamp"], int):
+                    raise ValueError("Status last_job.timestamp must be an integer")
+
+        heartbeat = normalized.get("heartbeat")
+        if isinstance(heartbeat, dict):
+            for key in (
+                "queue_len",
+                "queue_length",
+                "printer_status",
+                "successful_jobs",
+                "timestamp",
+                "version",
+                "bridge_version",
+                "heartbeat_interval",
+            ):
+                if key in heartbeat:
+                    normalized.setdefault(key, heartbeat[key])
+
+        if "queue_length" in normalized:
+            normalized["queue_len"] = normalized["queue_length"]
+        elif "queue_len" in normalized:
+            normalized["queue_length"] = normalized["queue_len"]
+
+        bridge_version = normalized.get("bridge_version", normalized.get("version"))
+        if bridge_version is not None:
+            normalized["bridge_version"] = str(bridge_version)
+            normalized["version"] = str(bridge_version)
+
+        last_job = normalized.get("last_job")
+        if isinstance(last_job, dict):
+            normalized["last_job"] = dict(last_job)
+            job_id = last_job.get("id", last_job.get("job_id"))
+            if job_id is not None:
+                normalized["job_id"] = str(job_id)
+            for key in ("status", "detail", "duplicate"):
+                if key in last_job:
+                    normalized[key] = last_job[key]
+
+        normalized[CONF_PRINTER_NAME] = printer_name
+        return normalized
+
+    @callback
+    def handle_telemetry(msg: Any) -> None:
+        """Parse once, update runtime state, and forward bridge telemetry."""
         try:
             payload = json.loads(msg.payload)
             if not isinstance(payload, dict):
                 raise TypeError("Status payload must be a JSON object")
+            payload = normalize_status_payload(payload)
         except json.JSONDecodeError:
             return
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Error handling status payload")
             return
 
-        payload[CONF_PRINTER_NAME] = printer_name
-        heartbeat = payload.get("heartbeat")
-        if isinstance(heartbeat, dict):
-            for key in (
-                "queue_len",
-                "printer_status",
-                "successful_jobs",
-                "timestamp",
-                "version",
-            ):
-                if key in heartbeat:
-                    payload.setdefault(key, heartbeat[key])
-        runtime_data.last_status = payload
-        update_availability(True)
-        bridge_version = (
-            heartbeat.get("version")
-            if isinstance(heartbeat, dict)
-            else payload.get("version")
-        )
+        runtime_data.last_status = {**runtime_data.last_status, **payload}
+        runtime_data.last_status_at = _monotonic()
+
+        heartbeat_interval = payload.get("heartbeat_interval")
+        if isinstance(heartbeat_interval, int) and heartbeat_interval > 0:
+            runtime_data.heartbeat_interval = heartbeat_interval
+
+        bridge_version = payload.get("bridge_version")
+        if bridge_version is not None:
+            runtime_data.bridge_version = str(bridge_version)
+
+        online = payload.get("online")
+        update_availability(bool(online) if isinstance(online, bool) else True)
+        schedule_heartbeat_timeout()
         async_validate_bridge_version_issue(
             hass,
             runtime_data.entry_id,
             printer_name,
-            str(bridge_version) if bridge_version else None,
+            runtime_data.bridge_version,
         )
         hass.bus.async_fire(EVENT_STATUS, payload)
 
@@ -922,10 +1071,15 @@ async def setup_print_service(
         message = str(payload.get("message", ""))
         _LOGGER.log(level, "Bridge log [%s]: %s", logger_name, message)
 
+    runtime_data.unsub_ack = await mqtt.async_subscribe(
+        hass,
+        runtime_data.ack_topic,
+        handle_telemetry,
+    )
     runtime_data.unsub_status = await mqtt.async_subscribe(
         hass,
         runtime_data.status_topic,
-        handle_status,
+        handle_telemetry,
     )
     runtime_data.unsub_log = await mqtt.async_subscribe(
         hass,
@@ -958,7 +1112,11 @@ async def unload_print_service(
 
     if runtime_data.unsub_status is not None:
         runtime_data.unsub_status()
+    if runtime_data.unsub_ack is not None:
+        runtime_data.unsub_ack()
     if runtime_data.unsub_log is not None:
         runtime_data.unsub_log()
     if runtime_data.unsub_availability is not None:
         runtime_data.unsub_availability()
+    if runtime_data.unsub_heartbeat_timeout is not None:
+        runtime_data.unsub_heartbeat_timeout()

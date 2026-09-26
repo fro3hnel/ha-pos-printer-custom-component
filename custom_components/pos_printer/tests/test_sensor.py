@@ -16,6 +16,7 @@ from custom_components.pos_printer.sensor import (
     LastJobIdSensor,
     LastJobStatusSensor,
     LastStatusTimestampSensor,
+    PrinterStatusSensor,
     QueueLengthSensor,
     SuccessfulJobsCounterSensor,
 )
@@ -88,6 +89,7 @@ async def test_sensors_update_states():
         LastJobDetailSensor("printer", "entry"),
         LastStatusTimestampSensor("printer", "entry"),
         QueueLengthSensor("printer", "entry"),
+        PrinterStatusSensor("printer", "entry"),
         BridgeVersionSensor("printer", "entry"),
         LastBridgeLogSensor("printer", "entry"),
         JobErrorBinarySensor("printer", "entry"),
@@ -129,6 +131,7 @@ async def test_sensors_update_states():
             "detail": "",
             "timestamp": 1620000000,
             "queue_len": 2,
+            "printer_status": 0,
             "successful_jobs": 1,
             "heartbeat": {"version": VERSION},
         },
@@ -151,11 +154,45 @@ async def test_sensors_update_states():
     assert sensors[2].native_value == ""
     assert sensors[3].native_value.timestamp() == 1620000000
     assert sensors[4].native_value == 2
-    assert sensors[5].native_value == VERSION
-    assert sensors[6].native_value == "worker online"
-    assert sensors[6].extra_state_attributes["level"] == "INFO"
-    assert sensors[7].is_on is False
-    assert sensors[8].native_value == 1
+    assert sensors[5].native_value == 0
+    assert sensors[6].native_value == VERSION
+    assert sensors[7].native_value == "worker online"
+    assert sensors[7].extra_state_attributes["level"] == "INFO"
+    assert sensors[8].is_on is False
+    assert sensors[9].native_value == 1
+
+
+def test_sensors_restore_from_retained_runtime_status():
+    """Native entities should use a retained snapshot without waiting for an event."""
+    runtime = PrinterRuntimeData(
+        entry_id="entry",
+        printer_name="printer",
+        print_topic="job",
+        status_topic="status",
+        log_topic="log",
+        available=True,
+        availability_known=True,
+        bridge_version="1.2.3",
+        last_status={
+            "status": "error",
+            "job_id": "job-1",
+            "detail": "paper jam",
+            "timestamp": 1700000000,
+            "queue_length": 2,
+            "printer_status": 7,
+            "successful_jobs": 5,
+        },
+    )
+
+    assert LastJobStatusSensor("printer", "entry", runtime).native_value == "error"
+    assert LastJobIdSensor("printer", "entry", runtime).native_value == "job-1"
+    assert LastJobDetailSensor("printer", "entry", runtime).native_value == "paper jam"
+    assert LastStatusTimestampSensor("printer", "entry", runtime).native_value
+    assert QueueLengthSensor("printer", "entry", runtime).native_value == 2
+    assert PrinterStatusSensor("printer", "entry", runtime).native_value == 7
+    assert BridgeVersionSensor("printer", "entry", runtime).native_value == "1.2.3"
+    assert JobErrorBinarySensor("printer", "entry", runtime).is_on is True
+    assert SuccessfulJobsCounterSensor("printer", "entry", runtime).native_value == 5
 
 
 @pytest.mark.asyncio

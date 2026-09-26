@@ -10,6 +10,7 @@ import yaml
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.service import _SERVICES_SCHEMA
 
+import custom_components.pos_printer.printer as printer_module
 from custom_components.pos_printer.const import DOMAIN, EVENT_AVAILABILITY
 from custom_components.pos_printer.printer import (
     SERVICE_PRINT_IMAGE_SCHEMA,
@@ -631,10 +632,12 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
 
     await setup_print_service(hass, {"printer_name": "printer"})
 
-    status_topic = "print/pos/printer/ack"
+    ack_topic = "print/pos/printer/ack"
+    status_topic = "print/pos/printer/status"
     log_topic = "print/pos/printer/log"
     availability_topic = "print/pos/printer/availability"
 
+    assert ack_topic in subscriptions
     assert status_topic in subscriptions
     assert log_topic in subscriptions
     assert availability_topic in subscriptions
@@ -681,9 +684,11 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
             },
             "printer_name": "printer",
             "queue_len": 3,
+            "queue_length": 3,
             "successful_jobs": 12,
             "timestamp": 1700000000,
             "version": "1.2.3",
+            "bridge_version": "1.2.3",
         },
     ) in hass.bus.events
     assert (
@@ -702,6 +707,116 @@ async def test_setup_subscribes_and_forwards_status_and_logs(monkeypatch):
         EVENT_AVAILABILITY,
         {"printer_name": "printer", "available": False},
     ) in hass.bus.events
+
+
+@pytest.mark.asyncio
+async def test_retained_status_restores_runtime_data_and_normalizes_last_job(
+    monkeypatch,
+):
+    """A retained v1 snapshot should populate native entities before their setup."""
+    hass = FakeHass()
+    subscriptions = {}
+
+    async def fake_wait_for_client(hass):
+        return
+
+    async def fake_subscribe(hass, topic, callback):
+        subscriptions[topic] = callback
+        return lambda: None
+
+    monkeypatch.setattr(
+        "homeassistant.components.mqtt.async_wait_for_mqtt_client",
+        fake_wait_for_client,
+    )
+    monkeypatch.setattr("homeassistant.components.mqtt.async_subscribe", fake_subscribe)
+
+    runtime = await setup_print_service(hass, {"printer_name": "printer"})
+    subscriptions["print/pos/printer/status"](
+        SimpleNamespace(
+            payload=json.dumps(
+                {
+                    "schema_version": 1,
+                    "printer_name": "untrusted-topic-value",
+                    "bridge_version": "1.2.3",
+                    "online": True,
+                    "timestamp": 1700000000,
+                    "heartbeat_interval": 60,
+                    "queue_length": 3,
+                    "printer_status": 0,
+                    "successful_jobs": 12,
+                    "last_job": {
+                        "id": "job-1",
+                        "status": "success",
+                        "detail": "",
+                        "duplicate": False,
+                        "timestamp": 1699999999,
+                    },
+                }
+            )
+        )
+    )
+
+    assert runtime.available is True
+    assert runtime.online is True
+    assert runtime.bridge_version == "1.2.3"
+    assert runtime.last_status["printer_name"] == "printer"
+    assert runtime.last_status["queue_len"] == 3
+    assert runtime.last_status["job_id"] == "job-1"
+    assert runtime.last_status["status"] == "success"
+    assert runtime.last_status["timestamp"] == 1700000000
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_timeout_marks_bridge_offline(monkeypatch):
+    """A missed retained-status heartbeat must turn connectivity off."""
+    hass = FakeHass()
+    hass.loop = object()
+    subscriptions = {}
+    scheduled_callbacks = []
+
+    async def fake_wait_for_client(hass):
+        return
+
+    async def fake_subscribe(hass, topic, callback):
+        subscriptions[topic] = callback
+        return lambda: None
+
+    def fake_call_later(hass, delay, callback):
+        scheduled_callbacks.append((delay, callback))
+        return lambda: None
+
+    monotonic_values = iter((10.0, 200.0))
+    monkeypatch.setattr(
+        "homeassistant.components.mqtt.async_wait_for_mqtt_client",
+        fake_wait_for_client,
+    )
+    monkeypatch.setattr("homeassistant.components.mqtt.async_subscribe", fake_subscribe)
+    monkeypatch.setattr(printer_module, "async_call_later", fake_call_later)
+    monkeypatch.setattr(printer_module, "_monotonic", lambda: next(monotonic_values))
+
+    runtime = await setup_print_service(hass, {"printer_name": "printer"})
+    subscriptions["print/pos/printer/status"](
+        SimpleNamespace(
+            payload=json.dumps(
+                {
+                    "schema_version": 1,
+                    "printer_name": "printer",
+                    "bridge_version": "1.2.3",
+                    "online": True,
+                    "timestamp": 1700000000,
+                    "heartbeat_interval": 60,
+                    "queue_length": 0,
+                    "printer_status": 0,
+                    "last_job": None,
+                }
+            )
+        )
+    )
+
+    assert scheduled_callbacks[-1][0] == 150
+    scheduled_callbacks[-1][1](None)
+    assert runtime.available is False
+    assert runtime.online is False
 
 
 @pytest.mark.asyncio
@@ -755,6 +870,13 @@ async def test_status_handler_invalid_json_and_errors(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR):
         status_cb(SimpleNamespace(payload="[]"))
     assert "Error handling status payload" in caplog.text
+    assert hass.bus.events == []
+
+    with caplog.at_level(logging.ERROR):
+        callbacks["print/pos/printer/status"](
+            SimpleNamespace(payload='{"schema_version": 1}')
+        )
+    assert "Status payload is missing fields" in caplog.text
     assert hass.bus.events == []
 
 

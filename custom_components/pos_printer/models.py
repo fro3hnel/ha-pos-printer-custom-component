@@ -17,12 +17,19 @@ class PrinterRuntimeData:
     print_topic: str
     status_topic: str
     log_topic: str
+    ack_topic: str = ""
     availability_topic: str = ""
+    unsub_ack: Callable[[], None] | None = None
     unsub_status: Callable[[], None] | None = None
     unsub_log: Callable[[], None] | None = None
     unsub_availability: Callable[[], None] | None = None
+    unsub_heartbeat_timeout: Callable[[], None] | None = None
     available: bool = False
     availability_known: bool = False
+    online: bool = False
+    bridge_version: str | None = None
+    last_status_at: float | None = None
+    heartbeat_interval: int = 60
     default_paper_width: int = 80
     default_feed_after: int = 4
     last_status: dict[str, Any] = field(default_factory=dict)
