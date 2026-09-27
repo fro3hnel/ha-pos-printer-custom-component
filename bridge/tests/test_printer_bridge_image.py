@@ -86,7 +86,7 @@ def test_print_image_uses_a_temporary_bmp_and_requested_alignment(printer):
 
     assert len(library.PrintImage.calls) == 1
     image_path, compress, alignment = library.PrintImage.calls[0]
-    assert compress is True
+    assert compress is False
     assert alignment.value == bridge_printer._ALIGN["right"]
     assert library.PrintImage.image_metadata == [("BMP", "RGB", (3, 2))]
     assert not Path(image_path.decode()).exists()
@@ -106,3 +106,22 @@ def test_print_image_includes_the_sdk_error_code(printer):
     assert len(library.PrintImage.calls) == 1
     image_path = library.PrintImage.calls[0][0]
     assert not Path(image_path.decode()).exists()
+
+
+def test_text_is_flushed_before_a_following_image(printer):
+    """Direct image rendering must not discard text buffered by the SDK."""
+    bridge_printer, library = printer
+
+    failures = bridge_printer.execute_job(
+        {
+            "message": [
+                {"type": "text", "content": "before image"},
+                {"type": "image", "content": _png_content()},
+            ],
+            "feed_after": 0,
+        }
+    )
+
+    assert failures == []
+    assert [call[0].value for call in library.LineFeed.calls] == [1, 0]
+    assert len(library.PrintImage.calls) == 1

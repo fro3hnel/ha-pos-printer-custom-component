@@ -390,6 +390,7 @@ class BixolonPrinter:
         paper_w = job.get("paper_width", CFG.default_width)
         self.lib.SetLeftMargin(c_int(CFG.left_margin))
         with self._lock:
+            text_pending = False
             for idx, item in enumerate(job["message"]):
                 t = "unknown"
                 try:
@@ -398,11 +399,20 @@ class BixolonPrinter:
                             f"message element must be dict, got {type(item).__name__}"
                         )
                     t = item.get("type", "unknown")
+
+                    # The SDK may discard buffered text when a direct image
+                    # is sent next. Force the text out before changing to the
+                    # image or barcode rendering path.
+                    if t != "text" and text_pending:
+                        self._feed(1)
+                        text_pending = False
+
                     if t == "text":
                         self._txt(
                             item["content"] + "\n",
                             item.get("alignment", "left"),
                         )
+                        text_pending = True
                     elif t == "barcode":
                         self._print_barcode(item)
                     elif t == "image":
@@ -496,7 +506,7 @@ class BixolonPrinter:
 
             result = self.lib.PrintImage(
                 tmp_path.encode(),
-                True,
+                False,
                 c_uint(self._ALIGN[alignment]),
             )
             if result != 0:
