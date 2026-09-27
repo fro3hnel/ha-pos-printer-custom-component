@@ -48,6 +48,7 @@ from ctypes import (
     RTLD_GLOBAL,
     Structure,
     byref,
+    c_bool,
     c_char_p,
     c_int,
     c_ubyte,
@@ -346,14 +347,11 @@ class BixolonPrinter:
         self.lib.PrintBarcode.argtypes = [c_int, c_char_p, POINTER(_BarcodeInfo)]
         self.lib.PrintBarcode.restype = c_int
 
-        # NV Image function prototypes
-        self.lib.DownloadNVImage.argtypes = [c_char_p, c_ubyte]
-        self.lib.DownloadNVImage.restype = c_int
-        self.lib.PrintNVImage.argtypes = [c_ubyte]
-        self.lib.PrintNVImage.restype = c_int
-        self.lib.RemoveNVImage.argtypes = [c_ubyte]
-        self.lib.RemoveNVImage.restype = c_int
-        self.lib.RemoveAllNVImage.restype = c_int
+        # PrintImage lets the SDK convert a regular image file directly to the
+        # printer raster format.  It avoids writing every dynamic image into
+        # the printer's non-volatile memory first.
+        self.lib.PrintImage.argtypes = [c_char_p, c_bool, c_uint]
+        self.lib.PrintImage.restype = c_int
 
         self.port = port
         self._lock = threading.Lock()
@@ -466,9 +464,12 @@ class BixolonPrinter:
     def _print_image(self, spec: dict[str, Any], paper_w: int) -> None:
         """
         Print an image from Base64, data URI, or URI in spec['content'].
-        Uses NV image functions: DownloadNVImage, PrintNVImage, RemoveNVImage.
+        Uses the Bixolon SDK's direct PrintImage path.
         """
-        del paper_w  # reserved for future image sizing support
+        # Home Assistant uses paper_w to cap the rendered image at 384 or 576
+        # pixels before it is sent to the bridge.  The SDK receives the final
+        # bitmap and handles the printer-specific raster conversion.
+        del paper_w
 
         raw_content = spec.get("content")
         if not isinstance(raw_content, str):
@@ -483,22 +484,25 @@ class BixolonPrinter:
         except Exception as exc:
             raise ValueError("Image load/convert failed") from exc
 
-        key = spec.get("nv_key", 1)
         tmp_path: str | None = None
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".bmp") as tmpf:
                 img_rgb.save(tmpf, format="BMP")
                 tmp_path = tmpf.name
 
-            if self.lib.DownloadNVImage(tmp_path.encode(), c_ubyte(key)) != 0:
-                raise RuntimeError(
-                    f"DownloadNVImage failed for key {key} (temp file {tmp_path})"
-                )
+            alignment = spec.get("alignment", "left")
+            if alignment not in self._ALIGN:
+                raise ValueError(f"Unsupported image alignment: {alignment}")
 
-            if self.lib.PrintNVImage(c_ubyte(key)) != 0:
-                raise RuntimeError(f"PrintNVImage failed for key {key}")
+            result = self.lib.PrintImage(
+                tmp_path.encode(),
+                True,
+                c_uint(self._ALIGN[alignment]),
+            )
+            if result != 0:
+                message = self._ERR_MAP.get(result, "unknown error")
+                raise RuntimeError(f"PrintImage failed: {message} (code {result})")
         finally:
-            self.lib.RemoveNVImage(c_ubyte(key))
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
