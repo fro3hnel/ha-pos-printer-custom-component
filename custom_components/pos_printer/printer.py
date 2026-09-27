@@ -32,8 +32,10 @@ from .const import (
     SERVICE_PRINT,
     SERVICE_PRINT_IMAGE,
     SERVICE_PRINT_PICTOGRAMS,
+    SERVICE_PRINT_PRICE_CHART,
     SERVICE_PRINT_TEXT,
 )
+from .charts import render_price_chart_data_uri
 from .exceptions import integration_error, service_validation_error
 from .image_processing import async_prepare_image_content
 from .models import DomainData, PrinterRuntimeData
@@ -576,6 +578,31 @@ async def _async_build_pictogram_payload(
     return payload
 
 
+async def _async_build_price_chart_payload(
+    hass: HomeAssistant,
+    data: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Render an exact price chart locally and return one image-print job."""
+    paper_width = int(data.get("paper_width", DEFAULT_PAPER_WIDTH))
+    title = str(data.get("title", "STROMPREIS") or "STROMPREIS").strip()
+    caption = str(data.get("caption", "") or "").strip()
+    image_content = await hass.async_add_executor_job(
+        render_price_chart_data_uri,
+        data["points"],
+        paper_width,
+    )
+    message: list[dict[str, Any]] = [
+        _make_text_element(title, alignment="center", bold=True, double_height=True),
+        {"type": "image", "content": image_content},
+    ]
+    if caption:
+        message.extend(_build_simple_text_lines(caption, alignment="center", bold=False))
+    payload: dict[str, Any] = {}
+    _apply_job_metadata(payload, data, None)
+    payload["message"] = message
+    return payload
+
+
 async def _async_publish_payload(
     hass: HomeAssistant,
     runtime_data: PrinterRuntimeData,
@@ -652,6 +679,23 @@ def _validate_pictograms(value: Any) -> list[str]:
     if len(set(pictograms)) != len(pictograms):
         raise vol.Invalid("pictograms must not contain duplicates")
     return pictograms
+
+
+def _validate_price_points(value: Any) -> list[dict[str, Any]]:
+    """Validate bounded point data for a rendered price chart."""
+    if not isinstance(value, (list, tuple)):
+        raise vol.Invalid("points must be a list")
+    points = [dict(item) for item in value if isinstance(item, Mapping)]
+    if len(points) != len(value) or not 2 <= len(points) <= 192:
+        raise vol.Invalid("points must contain 2 to 192 objects")
+    for point in points:
+        if not isinstance(point.get("label", point.get("time")), str):
+            raise vol.Invalid("each point needs a text label")
+        try:
+            float(point.get("price", point.get("value")))
+        except (TypeError, ValueError) as err:
+            raise vol.Invalid("each point needs a numeric price") from err
+    return points
 
 
 _COMMON_JOB_FIELDS: dict[Any, Any] = {
@@ -750,6 +794,17 @@ SERVICE_PRINT_PICTOGRAMS_SCHEMA = vol.Schema(
 )
 
 
+SERVICE_PRINT_PRICE_CHART_SCHEMA = vol.Schema(
+    {
+        **_COMMON_JOB_FIELDS,
+        vol.Required("points"): _validate_price_points,
+        vol.Optional("title"): cv.string,
+        vol.Optional("caption"): cv.string,
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+
+
 async def async_register_services(hass: HomeAssistant) -> None:
     """Register integration services once per Home Assistant instance."""
     domain_data = _get_domain_data(hass)
@@ -788,6 +843,13 @@ async def async_register_services(hass: HomeAssistant) -> None:
         )
         await _async_publish_payload(hass, runtime_data, payload)
 
+    async def handle_print_price_chart(call: ServiceCall) -> None:
+        """Render exact price points to a receipt image on the HA host."""
+        runtime_data = _resolve_target_printer(call, domain_data.printers)
+        data = _with_printer_defaults(call.data, runtime_data)
+        payload = await _async_build_price_chart_payload(hass, data)
+        await _async_publish_payload(hass, runtime_data, payload)
+
     _service_register(hass, SERVICE_PRINT, handle_print, SERVICE_PRINT_SCHEMA)
     _service_register(
         hass, SERVICE_PRINT_TEXT, handle_print_text, SERVICE_PRINT_TEXT_SCHEMA
@@ -800,6 +862,12 @@ async def async_register_services(hass: HomeAssistant) -> None:
         SERVICE_PRINT_PICTOGRAMS,
         handle_print_pictograms,
         SERVICE_PRINT_PICTOGRAMS_SCHEMA,
+    )
+    _service_register(
+        hass,
+        SERVICE_PRINT_PRICE_CHART,
+        handle_print_price_chart,
+        SERVICE_PRINT_PRICE_CHART_SCHEMA,
     )
     domain_data.services_registered = True
 
