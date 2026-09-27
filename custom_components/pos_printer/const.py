@@ -14,6 +14,7 @@ CONF_FEED_AFTER = "feed_after"
 SERVICE_PRINT = "print"
 SERVICE_PRINT_IMAGE = "print_image"
 SERVICE_PRINT_PICTOGRAMS = "print_pictograms"
+SERVICE_PRINT_PRICE_CHART = "print_price_chart"
 SERVICE_PRINT_TEXT = "print_text"
 
 EVENT_STATUS = f"{DOMAIN}.status"
