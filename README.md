@@ -153,8 +153,8 @@ Choose exactly one source:
 
 Image options are `image_alignment`, `image_max_width`, `image_threshold`,
 `image_dither`, `image_invert`, `image_rotation`, `image_fetch_timeout`, and the
-advanced passthrough fields `image_process_on_host` and `image_nv_key`. Title and
-caption alignment/bold options plus the common job settings are also supported.
+advanced passthrough field `image_process_on_host`. Title and caption
+alignment/bold options plus the common job settings are also supported.
 Input is limited to 10 MiB and 40 megapixels.
 
 ### `pos_printer.print_pictograms`

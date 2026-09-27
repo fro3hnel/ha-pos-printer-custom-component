@@ -167,13 +167,6 @@
               "$comment": "Raw Base64-encoded image payload"
             }
           ]
-        },
-        "nv_key": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 255,
-          "default": 1,
-          "$comment": "Key for NV image storage on printer"
         }
       }
     }

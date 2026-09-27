@@ -198,7 +198,6 @@ async def test_print_service_builds_message_from_gui_fields(mqtt_publish_mock):
             "image_content": "data:image/png;base64,iVBORw0KGgo=",
             "image_process_on_host": False,
             "image_alignment": "right",
-            "image_nv_key": 7,
         },
         blocking=True,
     )
@@ -232,7 +231,6 @@ async def test_print_service_builds_message_from_gui_fields(mqtt_publish_mock):
             "type": "image",
             "content": "data:image/png;base64,iVBORw0KGgo=",
             "alignment": "right",
-            "nv_key": 7,
         },
     ]
 

@@ -257,10 +257,6 @@
             "name": "Bildausrichtung",
             "description": "Ausrichtung des Bildes."
           },
-          "image_nv_key": {
-            "name": "Bild-NV-Key",
-            "description": "NV-Bildschlüssel (0-255)."
-          },
           "image_process_on_host": {
             "name": "Bild auf Home Assistant verarbeiten",
             "description": "Bild auf dem Home-Assistant-Host skalieren und dithern, bevor es an den Pi gesendet wird."

@@ -279,10 +279,6 @@
             "name": "Image alignment",
             "description": "Image alignment."
           },
-          "image_nv_key": {
-            "name": "Image NV key",
-            "description": "NV image key (0-255)."
-          },
           "image_process_on_host": {
             "name": "Process image on Home Assistant",
             "description": "Resize and dither the image on the Home Assistant host before sending it to the Pi."

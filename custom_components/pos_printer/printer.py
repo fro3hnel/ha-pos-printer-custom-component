@@ -281,8 +281,6 @@ async def _async_build_image_element(
     element: dict[str, Any] = {"type": "image", "content": content}
     if (alignment := data.get("image_alignment")) is not None:
         element["alignment"] = alignment
-    if (nv_key := data.get("image_nv_key")) is not None:
-        element["nv_key"] = nv_key
     return element
 
 
@@ -681,7 +679,6 @@ _IMAGE_SOURCE_FIELDS: dict[Any, Any] = {
     vol.Optional("image_rotation"): _int_choice(*_IMAGE_ROTATIONS),
     vol.Optional("image_fetch_timeout"): _int_range(minimum=1),
     vol.Optional("image_alignment"): vol.In(_ALIGNMENTS),
-    vol.Optional("image_nv_key"): _int_range(minimum=0, maximum=255),
 }
 
 SERVICE_PRINT_SCHEMA = vol.Schema(
