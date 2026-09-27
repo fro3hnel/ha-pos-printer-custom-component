@@ -748,3 +748,49 @@ print_image:
         number:
           min: 0
           step: 1
+
+
+print_price_chart:
+  name: "Print price chart"
+  description: "Render exact price points as a monochrome line chart and print it on a POS printer."
+  fields:
+    config_entry_id:
+      name: "Printer"
+      selector:
+        config_entry:
+          integration: pos_printer
+    printer_name:
+      name: "Legacy printer name"
+      advanced: true
+      selector:
+        text:
+    points:
+      name: "Chart points"
+      description: "Objects with label/time and price/value, in print order."
+      required: true
+      selector:
+        object:
+    title:
+      name: "Title"
+      default: "STROMPREIS"
+      selector:
+        text:
+    caption:
+      name: "Caption"
+      selector:
+        text:
+    paper_width:
+      name: "Paper width"
+      selector:
+        select:
+          options:
+            - label: "53 mm"
+              value: "53"
+            - label: "80 mm"
+              value: "80"
+    feed_after:
+      name: "Feed after"
+      selector:
+        number:
+          min: 0
+          step: 1
