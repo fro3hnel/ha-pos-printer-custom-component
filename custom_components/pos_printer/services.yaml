@@ -749,10 +749,9 @@ print_image:
           min: 0
           step: 1
 
-
 print_price_chart:
   name: "Print price chart"
-  description: "Render exact price points as a monochrome line chart and print it on a POS printer."
+  description: "Render exact price points as a monochrome 15-minute bar chart and print it on a POS printer. Supply only future points in print order."
   fields:
     config_entry_id:
       name: "Printer"
