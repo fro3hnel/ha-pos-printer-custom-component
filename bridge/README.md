@@ -3,6 +3,11 @@
 Python service for Raspberry Pi Zero W that consumes MQTT print jobs, buffers
 them in Redis, and prints them on a Bixolon POS printer via the native C SDK.
 
+Text is sent in the Windows-1252 (Western European) code page. This correctly
+prints German umlauts, `ß`, the middle dot (`·`), and common Western European
+punctuation. Characters not available in that code page, including emoji, are
+silently omitted so they cannot become garbled printer symbols.
+
 The manual install path is aligned with the `pi-gen` image:
 
 - runtime files live in `/opt/pos-printer-bridge`

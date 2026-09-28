@@ -11,7 +11,8 @@ Features
 * Redis Spool       : 10 lists ``print_queue:0`` … ``print_queue:9`` (0 = highest prio)
 * Status Lifecycle  : queued, printing and a correlated final acknowledgement
 * Printer Width     : 80 mm default, overridable per job (field ``paper_width``)
-* UTF‑8             : ``SetTextEncoding(ENCODING_ASCII)``
+* Text              : Windows-1252 for Western European characters; unsupported
+                     characters such as emoji are omitted before printing.
 * No automatic retries – on error an error ACK is sent, remaining items keep printing.
 
 Environment (.env)
@@ -283,6 +284,9 @@ class BixolonPrinter:
     _ALIGN = {"left": 0, "center": 1, "right": 2}
     _FONTA = 0  # ATTR_FONTTYPE_A
     _SIZE0 = 0  # TS_HEIGHT_0 | TS_WIDTH_0
+    _TEXT_CODEC = "cp1252"
+    _CHARSET_WPC1252 = 16  # CS_WPC1252 in Bixolon's bxlConst.c
+    _EMOJI_CONTINUATION_MARKS = frozenset({"\u20e3", "\ufe0f"})
 
     # Barcode maps (simplified)
     _BC_TYPE = {
@@ -342,8 +346,8 @@ class BixolonPrinter:
         self.lib.PartialCut.restype = c_int
         self.lib.SetLeftMargin.argtypes = [c_int]
         self.lib.SetLeftMargin.restype = c_int
-        self.lib.SetTextEncoding.argtypes = [c_uint]
-        self.lib.SetTextEncoding.restype = c_int
+        self.lib.SetCharSet.argtypes = [c_uint]
+        self.lib.SetCharSet.restype = c_int
         self.lib.PrintBarcode.argtypes = [c_int, c_char_p, POINTER(_BarcodeInfo)]
         self.lib.PrintBarcode.restype = c_int
 
@@ -363,7 +367,14 @@ class BixolonPrinter:
         if rc != 0:
             msg = self._ERR_MAP.get(rc, f"unknown error {rc}")
             raise RuntimeError(f"Printer connection failed: {msg} (code {rc})")
-        self.lib.SetTextEncoding(0)  # ENCODING_ASCII
+        charset_rc = self.lib.SetCharSet(self._CHARSET_WPC1252)
+        if charset_rc != 0:
+            self.lib.DisconnectPrinter()
+            msg = self._ERR_MAP.get(charset_rc, f"unknown error {charset_rc}")
+            raise RuntimeError(
+                "Printer character set configuration failed: "
+                f"{msg} (code {charset_rc})"
+            )
         self._connected = True
         LOGGER.info("Printer connected on %s", self.port.decode())
 
@@ -373,8 +384,32 @@ class BixolonPrinter:
             self._connected = False
 
     # ---------------- primitives ----------------
+    @classmethod
+    def _encode_text(cls, text: str) -> bytes:
+        """Return text the printer's Western European font can render safely.
+
+        The Bixolon receipt font has no Unicode or emoji glyphs.  Windows-1252
+        preserves Western European text while ``ignore`` removes every other
+        code point.  Emoji presentation and keycap marks also remove their
+        preceding base character, so e.g. ``©️`` and ``1️⃣`` do not leave a
+        partial emoji behind.
+        """
+        filtered: list[str] = []
+        for character in text:
+            if character == "\x00":
+                continue
+            if character in cls._EMOJI_CONTINUATION_MARKS:
+                if filtered:
+                    filtered.pop()
+                continue
+            filtered.append(character)
+        return "".join(filtered).encode(cls._TEXT_CODEC, errors="ignore")
+
     def _txt(self, txt: str, align: str = "left") -> None:
-        if self.lib.PrintText(txt.encode(), self._ALIGN[align], self._FONTA, self._SIZE0) != 0:
+        encoded_text = self._encode_text(txt)
+        if self.lib.PrintText(
+            encoded_text, self._ALIGN[align], self._FONTA, self._SIZE0
+        ) != 0:
             raise RuntimeError("PrintText failed")
 
     def _feed(self, n: int = 5) -> None:

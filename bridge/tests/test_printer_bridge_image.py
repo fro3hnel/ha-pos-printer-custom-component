@@ -41,7 +41,7 @@ class FakeBixolonLibrary:
         self.LineFeed = FakeCFunction()
         self.PartialCut = FakeCFunction()
         self.SetLeftMargin = FakeCFunction()
-        self.SetTextEncoding = FakeCFunction()
+        self.SetCharSet = FakeCFunction()
         self.PrintBarcode = FakeCFunction()
         self.PrintImage = FakeCFunction(print_image_result, capture_image=True)
 
@@ -74,6 +74,26 @@ def test_print_image_binds_the_direct_sdk_function(printer):
         printer_bridge.c_uint,
     ]
     assert library.PrintImage.restype is printer_bridge.c_int
+
+
+def test_connect_configures_the_printer_for_windows_1252(printer):
+    """The printer and outgoing text bytes must use the same code page."""
+    bridge_printer, library = printer
+
+    bridge_printer.connect()
+
+    assert library.SetCharSet.argtypes == [printer_bridge.c_uint]
+    assert library.SetCharSet.restype is printer_bridge.c_int
+    assert library.SetCharSet.calls == [(bridge_printer._CHARSET_WPC1252,)]
+
+
+def test_text_uses_windows_1252_and_omits_unsupported_characters(printer):
+    """Western European punctuation prints correctly while emoji are skipped."""
+    bridge_printer, library = printer
+
+    bridge_printer._txt("Grüße ·🙂©️1️⃣")
+
+    assert library.PrintText.calls[0][0] == b"Gr\xfc\xdfe \xb7"
 
 
 def test_print_image_uses_a_temporary_bmp_and_requested_alignment(printer):
