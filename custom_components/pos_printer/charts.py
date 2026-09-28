@@ -45,7 +45,9 @@ def render_price_chart(
     # Receipt paper has effectively unlimited length.  Put time on the long
     # axis so that every 15-minute price interval gets its own readable row.
     row_height = 13
-    left, right, top, bottom = 78, 18, 30, 30
+    # PrintImage/ImageMagick can crop the right-most columns on some Bixolon
+    # units. Keep the chart inside a conservative 500-pixel safe width.
+    left, right, top, bottom = 78, 88, 30, 30
     height = top + bottom + len(normalized) * row_height
     plot_width = width - left - right
     values = [value for _, value in normalized]
