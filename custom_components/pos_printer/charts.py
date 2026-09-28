@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import io
 from collections.abc import Mapping, Sequence
-from math import ceil
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
@@ -33,7 +32,7 @@ def _point(item: Mapping[str, Any]) -> tuple[str, float]:
 def render_price_chart(
     points: Sequence[Mapping[str, Any]], paper_width: int = DEFAULT_PAPER_WIDTH
 ) -> Image.Image:
-    """Render price points as a clear, one-bit line chart."""
+    """Render future price points as a tall, one-bit horizontal bar chart."""
     normalized = [_point(item) for item in points]
     if len(normalized) < 2:
         raise ValueError("At least two chart points are required")
@@ -43,47 +42,48 @@ def render_price_chart(
     width = PAPER_WIDTH_TO_PIXELS.get(
         paper_width, PAPER_WIDTH_TO_PIXELS[DEFAULT_PAPER_WIDTH]
     )
-    height = 400
-    left, right, top, bottom = 64, 18, 20, 54
+    # Receipt paper has effectively unlimited length.  Put time on the long
+    # axis so that every 15-minute price interval gets its own readable row.
+    row_height = 13
+    left, right, top, bottom = 78, 18, 30, 30
+    height = top + bottom + len(normalized) * row_height
     plot_width = width - left - right
-    plot_height = height - top - bottom
     values = [value for _, value in normalized]
-    low, high = min(values), max(values)
-    span = high - low
-    padding = max(span * 0.12, 0.25)
-    low, high = low - padding, high + padding
-    span = high - low
+    low, high = min(0.0, min(values)), max(0.0, max(values))
+    span = high - low or 1.0
 
     image = Image.new("1", (width, height), color=1)
     draw = ImageDraw.Draw(image)
     small, normal = _font(12), _font(16)
 
-    for row in range(5):
-        y = top + round(plot_height * row / 4)
-        value = high - span * row / 4
-        draw.line((left, y, width - right, y), fill=0, width=1)
-        draw.text((4, y - 6), f"{value:.1f}", fill=0, font=small)
+    def x_for(value: float) -> int:
+        return left + round((value - low) * plot_width / span)
 
-    draw.line((left, top, left, height - bottom), fill=0, width=2)
-    draw.line((left, height - bottom, width - right, height - bottom), fill=0, width=2)
+    # Price grid runs across the paper; labels only need a few decimal values.
+    for column in range(5):
+        value = low + span * column / 4
+        x = x_for(value)
+        draw.line((x, top, x, height - bottom), fill=0, width=1)
+        label = f"{value:.1f}"
+        label_box = draw.textbbox((0, 0), label, font=small)
+        draw.text((x - (label_box[2] - label_box[0]) // 2, 4), label, fill=0, font=small)
 
-    count = len(normalized)
-    xy: list[tuple[int, int]] = []
-    for index, (_, value) in enumerate(normalized):
-        x = left + round(plot_width * index / (count - 1))
-        y = top + round((high - value) * plot_height / span)
-        xy.append((x, y))
-    draw.line(xy, fill=0, width=3, joint="curve")
-    for x, y in xy:
-        draw.ellipse((x - 3, y - 3, x + 3, y + 3), fill=0)
+    zero_x = x_for(0.0)
+    draw.line((zero_x, top, zero_x, height - bottom), fill=0, width=2)
+    draw.text((left, 18), "ct/kWh", fill=0, font=normal)
 
-    tick_step = max(1, ceil(count / 7))
-    for index in range(0, count, tick_step):
-        x = xy[index][0]
-        draw.line((x, height - bottom, x, height - bottom + 5), fill=0, width=1)
-        draw.text((x - 12, height - bottom + 10), normalized[index][0], fill=0, font=small)
-    draw.text((left, height - 18), "Stunde", fill=0, font=normal)
-    draw.text((width - 92, 2), "ct/kWh", fill=0, font=small)
+    for index, (label, value) in enumerate(normalized):
+        y = top + index * row_height
+        bar_end = x_for(value)
+        draw.rectangle(
+            (min(zero_x, bar_end), y + 2, max(zero_x, bar_end), y + row_height - 3),
+            fill=0,
+        )
+        # Hour labels are retained, quarter-hour labels fill the remaining rows.
+        draw.text((2, y + 1), label, fill=0, font=small)
+
+    draw.line((left, top, left, height - bottom), fill=0, width=1)
+    draw.line((left, height - bottom, width - right, height - bottom), fill=0, width=1)
     return image
 
 
