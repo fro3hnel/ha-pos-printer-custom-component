@@ -793,7 +793,6 @@ SERVICE_PRINT_PICTOGRAMS_SCHEMA = vol.Schema(
     extra=vol.PREVENT_EXTRA,
 )
 
-
 SERVICE_PRINT_PRICE_CHART_SCHEMA = vol.Schema(
     {
         **_COMMON_JOB_FIELDS,
